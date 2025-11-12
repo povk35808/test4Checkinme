@@ -626,8 +626,8 @@ function mergeAttendanceAndLeave(attendanceRecords, leaveRecords) {
   return Array.from(mergedMap.values());
 }
 
-// --- *** ថ្មី: Function សម្រាប់ merge និង render UI *** ---
-function mergeAndRenderHistory() {
+// --- *** ថ្មី: Function សម្រាប់ merge និង render UI (កែប្រែ) *** ---
+async function mergeAndRenderHistory() { // <-- ធ្វើឱ្យវា async
   // 1. Merge the two global arrays
   currentMonthRecords = mergeAttendanceAndLeave(attendanceRecords, leaveRecords);
 
@@ -655,7 +655,7 @@ function mergeAndRenderHistory() {
   // 3. Render
   renderTodayHistory();
   renderMonthlyHistory();
-  updateButtonState();
+  await updateButtonState(); // <-- បន្ថែម await
 }
 
 // --- AI & Camera Functions ---
@@ -891,6 +891,7 @@ async function checkFullLeaveStatus(employeeId, checkType) {
   }
 }
 
+// --- *** កែប្រែ: លុបការពិនិត្យច្បាប់ (Leave Check) ចេញ *** ---
 async function startFaceScan(action) {
   currentScanAction = action;
 
@@ -912,39 +913,8 @@ async function startFaceScan(action) {
     return;
   }
 
-  attendanceStatus.textContent = "កំពុងពិនិត្យមើលច្បាប់...";
-  attendanceStatus.classList.add("animate-pulse");
-
-  const outOfOfficeStatus = await checkLeaveStatus(currentUser.id, action);
-  if (outOfOfficeStatus && outOfOfficeStatus.blocked) {
-    attendanceStatus.classList.remove("animate-pulse");
-    updateButtonState();
-    if (!outOfOfficeStatus.reason.includes("Error")) {
-      showMessage(
-        "មិនអាចស្កេនបាន",
-        `អ្នកបានសុំច្បាប់៖ ${outOfOfficeStatus.reason}`,
-        true
-      );
-    }
-    return;
-  }
-
-  const fullLeaveStatus = await checkFullLeaveStatus(currentUser.id, action);
-
-  attendanceStatus.classList.remove("animate-pulse");
-  updateButtonState();
-
-  if (fullLeaveStatus && fullLeaveStatus.blocked) {
-    if (!fullLeaveStatus.reason.includes("Error")) {
-      showMessage(
-        "មិនអាចស្កេនបាន",
-        `អ្នកបានសុំច្បាប់៖ ${fullLeaveStatus.reason}`,
-        true
-      );
-    }
-    return;
-  }
-
+  // Leave and Shift checks are now done by updateButtonState()
+  
   cameraLoadingText.textContent = "កំពុងស្នើសុំកាមេរ៉ា...";
   cameraHelpText.textContent = "សូមអនុញ្ញាតឱ្យប្រើប្រាស់កាមេរ៉ា";
   captureButton.style.display = "none";
@@ -1302,7 +1272,7 @@ async function selectUser(employee) {
   changeView("homeView");
 
   setupAttendanceListener();
-  startLeaveListeners(); // <-- *** ថ្មី: បន្ថែមការហៅ Function នេះ ***
+  startLeaveListeners();
   startSessionListener(employee.id);
 
   prepareFaceMatcher(employee.photoUrl);
@@ -1311,7 +1281,6 @@ async function selectUser(employee) {
   searchInput.value = "";
 }
 
-// --- *** កែប្រែ: Function នេះត្រូវបានកែប្រែ *** ---
 function logout() {
   currentUser = null;
   currentUserShift = null;
@@ -1331,7 +1300,6 @@ function logout() {
     sessionListener = null;
   }
 
-  // --- *** ថ្មី: បញ្ឈប់ Listeners សម្រាប់ច្បាប់ *** ---
   if (leaveCollectionListener) {
     leaveCollectionListener();
     leaveCollectionListener = null;
@@ -1340,31 +1308,27 @@ function logout() {
     outCollectionListener();
     outCollectionListener = null;
   }
-  // --- ************************************* ---
 
   attendanceCollectionRef = null;
   currentMonthRecords = [];
-  attendanceRecords = []; // <-- *** ថ្មី: Reset ***
-  leaveRecords = []; // <-- *** ថ្មី: Reset ***
+  attendanceRecords = [];
+  leaveRecords = [];
 
-  // *** កែប្រែ: ប្រើ ID របស់ Container ថ្មី ដើម្បីសម្អាត Card ***
-  // (យើងប្រើ Global const ที่เราประกาศไว้ข้างบน)
   if (historyContainer) {
-    historyContainer.innerHTML = ""; // លុប Card ចាស់ៗចេញ
+    historyContainer.innerHTML = "";
     if (noHistoryRow) {
-      noHistoryRow.textContent = "មិនទាន់មានទិន្នន័យថ្ងៃនេះ"; // Reset text
-      historyContainer.appendChild(noHistoryRow); // បង្ហាញសារ "គ្មានទិន្នន័យ"
+      noHistoryRow.textContent = "មិនទាន់មានទិន្នន័យថ្ងៃនេះ";
+      historyContainer.appendChild(noHistoryRow);
     }
   }
 
   if (monthlyHistoryContainer) {
-    monthlyHistoryContainer.innerHTML = ""; // លុប Card ចាស់ៗចេញ
+    monthlyHistoryContainer.innerHTML = "";
     if (noMonthlyHistoryRow) {
-      noMonthlyHistoryRow.textContent = "មិនទាន់មានទិន្នន័យ"; // Reset text
-      monthlyHistoryContainer.appendChild(noMonthlyHistoryRow); // បង្ហាញសារ "គ្មានទិន្នន័យ"
+      noMonthlyHistoryRow.textContent = "មិនទាន់មានទិន្នន័យ";
+      monthlyHistoryContainer.appendChild(noMonthlyHistoryRow);
     }
   }
-  // --- *** ចប់ការកែប្រែ *** ---
 
   searchInput.value = "";
   employeeListContainer.classList.add("hidden");
@@ -1446,7 +1410,7 @@ function startLeaveListeners() {
     leaveRecords = await fetchAllLeaveForMonth(employeeId);
     console.log(`Real-time Leave Updated: ${leaveRecords.length} records.`);
     // 2. Call merge and render
-    mergeAndRenderHistory();
+    await mergeAndRenderHistory(); // <-- បន្ថែម await
   };
 
   // Listener 1: For 'leave_requests'
@@ -1504,7 +1468,7 @@ function setupAttendanceListener() {
 
   attendanceListener = onSnapshot(
     attendanceCollectionRef,
-    (querySnapshot) => {
+    async (querySnapshot) => { // <-- បន្ថែម async
       let allRecords = [];
       querySnapshot.forEach((doc) => {
         allRecords.push(doc.data());
@@ -1522,7 +1486,7 @@ function setupAttendanceListener() {
       );
 
       // 2. Call the merge and render function
-      mergeAndRenderHistory();
+      await mergeAndRenderHistory(); // <-- បន្ថែម await
     },
     (error) => {
       console.error("Error listening to attendance:", error);
@@ -1534,14 +1498,15 @@ function setupAttendanceListener() {
   );
 }
 
-// --- *** កែប្រែ: សរសេរ Function នេះឡើងវិញ សម្រាប់ Card *** ---
 function renderMonthlyHistory() {
   const container = document.getElementById("monthlyHistoryContainer");
   const noDataRow = document.getElementById("noMonthlyHistoryRow");
+  if (!container || !noDataRow) return; // បង្ការ Error
+  
   container.innerHTML = ""; // លុប Card ចាស់ៗចេញ
 
   if (currentMonthRecords.length === 0) {
-    if (noDataRow) container.appendChild(noDataRow);
+    container.appendChild(noDataRow);
     return;
   }
 
@@ -1640,10 +1605,11 @@ function renderMonthlyHistory() {
   });
 }
 
-// --- *** កែប្រែ: សរសេរ Function នេះឡើងវិញ សម្រាប់ Card *** ---
 function renderTodayHistory() {
   const container = document.getElementById("historyContainer");
   const noDataRow = document.getElementById("noHistoryRow");
+  if (!container || !noDataRow) return; // បង្ការ Error
+
   container.innerHTML = ""; // លុប Card ចាស់ៗចេញ
 
   const todayString = getTodayDateString();
@@ -1652,7 +1618,7 @@ function renderTodayHistory() {
   );
 
   if (!todayRecord) {
-    if (noDataRow) container.appendChild(noDataRow);
+    container.appendChild(noDataRow);
     return;
   }
 
@@ -1750,85 +1716,106 @@ function renderTodayHistory() {
   container.appendChild(card);
 }
 
-
-function updateButtonState() {
+// --- *** កែប្រែ: Function នេះត្រូវបានសរសេរឡើងវិញទាំងស្រុង *** ---
+async function updateButtonState() {
   const todayString = getTodayDateString();
-
   const todayData = currentMonthRecords.find(
     (record) => record.date === todayString
   );
 
+  // --- 1. ពិនិត្យលក្ខខ័ណ្ឌទាំងអស់ (Leave and Shift) ---
+  
+  // ពិនិត្យច្បាប់ (Request 1: Check Leave first)
+  const outOfOfficeInStatus = await checkLeaveStatus(currentUser.id, "checkIn");
+  const fullLeaveInStatus = await checkFullLeaveStatus(currentUser.id, "checkIn");
+  const leaveBlockIn = outOfOfficeInStatus || fullLeaveInStatus;
+  
+  const outOfOfficeOutStatus = await checkLeaveStatus(currentUser.id, "checkOut");
+  const fullLeaveOutStatus = await checkFullLeaveStatus(currentUser.id, "checkOut");
+  const leaveBlockOut = outOfOfficeOutStatus || fullLeaveOutStatus;
+
+  // ពិនិត្យម៉ោងវេន (Request 2: Check Shift Time)
   const canCheckIn = checkShiftTime(currentUserShift, "checkIn");
   const canCheckOut = checkShiftTime(currentUserShift, "checkOut");
 
-  checkInButton.disabled = false;
-  checkOutButton.disabled = true;
-  attendanceStatus.textContent = "សូមធ្វើការ Check-in";
-  attendanceStatus.className =
-    "text-center text-sm text-blue-700 pb-4 px-6 h-5";
+  // --- 2. កំណត់ស្ថានភាពប៊ូតុង Check-in ---
+  let checkInDisabled = false;
+  let statusMessage = "សូមធ្វើការ Check-in";
+  let statusClass = "text-blue-700";
 
-  if (!canCheckIn && !todayData) {
-    attendanceStatus.textContent = `ក្រៅម៉ោង Check-in (${currentUserShift})`;
-    attendanceStatus.className =
-      "text-center text-sm text-yellow-600 pb-4 px-6 h-5";
+  if (todayData && todayData.checkIn) {
+    checkInDisabled = true;
+    if (isShortData(`<span class="${statusClass}">${todayData.checkIn}</span>`)) { // ប្រើ isShortData
+      statusMessage = `បាន Check-in ម៉ោង: ${todayData.checkIn}`;
+      statusClass = "text-green-700";
+    } else {
+      statusMessage = `ថ្ងៃនេះអ្នកមាន៖ ${todayData.checkIn}`;
+      statusClass = "text-blue-700";
+    }
+  } else if (leaveBlockIn) {
+    checkInDisabled = true;
+    statusMessage = `អ្នកបានសុំច្បាប់៖ ${leaveBlockIn.reason}`;
+    statusClass = "text-red-700";
+  } else if (!canCheckIn) {
+    checkInDisabled = true; // (Request 2: Disable button)
+    statusMessage = `ក្រៅម៉ោង Check-in (${currentUserShift})`;
+    statusClass = "text-yellow-600";
   }
 
-  if (todayData) {
-    if (todayData.checkIn) {
-      checkInButton.disabled = true;
-      checkOutButton.disabled = false;
+  checkInButton.disabled = checkInDisabled;
 
-      if (
-        !todayData.checkIn.includes("AM") &&
-        !todayData.checkIn.includes("PM")
-      ) {
-        attendanceStatus.textContent = `ថ្ងៃនេះអ្នកមាន៖ ${todayData.checkIn}`;
-        attendanceStatus.className =
-          "text-center text-sm text-blue-700 pb-4 px-6 h-5";
-        checkOutButton.disabled = true; // *** ត្រូវបិទ Check-out បើ Check-in ជាច្បាប់
-      } else {
-        attendanceStatus.textContent = `បាន Check-in ម៉ោង: ${todayData.checkIn}`;
-        attendanceStatus.className =
-          "text-center text-sm text-green-700 pb-4 px-6 h-5";
-      }
+  // --- 3. កំណត់ស្ថានភាពប៊ូតុង Check-out ---
+  let checkOutDisabled = true; // Disable by default
 
-      if (!canCheckOut && !todayData.checkOut) {
-        attendanceStatus.textContent = `ក្រៅម៉ោង Check-out (${currentUserShift})`;
-        attendanceStatus.className =
-          "text-center text-sm text-yellow-600 pb-4 px-6 h-5";
-      }
+  if (todayData && todayData.checkIn && !todayData.checkOut) {
+    // Can only check out if checked in AND not yet checked out
+    checkOutDisabled = false;
+
+    if (leaveBlockOut) {
+      checkOutDisabled = true;
+      statusMessage = `អ្នកបានសុំច្បាប់៖ ${leaveBlockOut.reason}`;
+      statusClass = "text-red-700";
+    } else if (!canCheckOut) {
+      checkOutDisabled = true; // (Request 2: Disable button)
+      statusMessage = `ក្រៅម៉ោង Check-out (${currentUserShift})`;
+      statusClass = "text-yellow-600";
     }
-    if (todayData.checkOut) {
-      checkOutButton.disabled = true;
+    
+    // If check-in was short (a time), override status message
+    if (isShortData(`<span class="${statusClass}">${todayData.checkIn}</span>`)) { // ប្រើ isShortData
+        if (checkOutDisabled) {
+          // Keep the 'leave' or 'outside shift' message
+        } else {
+          statusMessage = `បាន Check-in ម៉ោង: ${todayData.checkIn}`;
+          statusClass = "text-green-700";
+        }
+    }
 
-      if (
-        !todayData.checkOut.includes("AM") &&
-        !todayData.checkOut.includes("PM")
-      ) {
-        attendanceStatus.textContent = `ថ្ងៃនេះអ្នកមាន៖ ${todayData.checkOut}`;
-        attendanceStatus.className =
-          "text-center text-sm text-blue-700 pb-4 px-6 h-5";
-        checkInButton.disabled = true; // *** ត្រូវបិទ Check-in បើ Check-out ជាច្បាប់
-      } else {
-        attendanceStatus.textContent = `បាន Check-out ម៉ោង: ${todayData.checkOut}`;
-        attendanceStatus.className =
-          "text-center text-sm text-red-700 pb-4 px-6 h-5";
-      }
+  } else if (todayData && todayData.checkOut) {
+    // Already checked out
+    checkOutDisabled = true;
+    if (isShortData(`<span class="${statusClass}">${todayData.checkOut}</span>`)) { // ប្រើ isShortData
+      statusMessage = `បាន Check-out ម៉ោង: ${todayData.checkOut}`;
+      statusClass = "text-red-700";
+    } else {
+      statusMessage = `ថ្ងៃនេះអ្នកមាន៖ ${todayData.checkOut}`;
+      statusClass = "text-blue-700";
     }
   }
+  
+  checkOutButton.disabled = checkOutDisabled;
+
+  // --- 4. អនុវត្តការផ្លាស់ប្តូរទៅ UI ---
+  attendanceStatus.textContent = statusMessage;
+  attendanceStatus.className = `text-center text-sm pb-4 px-6 h-5 ${statusClass}`;
 }
 
+
+// --- *** កែប្រែ: លុបការពិនិត្យម៉ោង (Shift Check) ចេញ *** ---
 async function handleCheckIn() {
   if (!attendanceCollectionRef || !currentUser) return;
 
-  if (!checkShiftTime(currentUserShift, "checkIn")) {
-    showMessage(
-      "បញ្ហា",
-      `ក្រៅម៉ោង Check-in សម្រាប់វេន "${currentUserShift}" របស់អ្នក។`,
-      true
-    );
-    return;
-  }
+  // Shift time check is already done by updateButtonState()
 
   checkInButton.disabled = true;
   checkOutButton.disabled = true;
@@ -1846,11 +1833,13 @@ async function handleCheckIn() {
         "អ្នកមិនស្ថិតនៅក្នុងទីតាំងកំណត់ទេ។ សូមចូលទៅក្នុងតំបន់ការិយាល័យ រួចព្យាយាមម្តងទៀត។",
         true
       );
-      updateButtonState();
+      // *** កែប្រែ: មិនត្រូវហៅ updateButtonState() ទេ ព្រោះវានឹងបង្កបញ្ហា Loop ***
       attendanceStatus.classList.remove("animate-pulse");
       attendanceStatus.textContent = "បរាជ័យ (ក្រៅទីតាំង)";
       attendanceStatus.className =
         "text-center text-sm text-red-700 pb-4 px-6 h-5";
+      // ត្រូវ Re-enable ប៊ូតុងដោយដៃ
+      await updateButtonState(); // ហៅម្តងទៀតដើម្បី Reset
       return;
     }
 
@@ -1858,7 +1847,7 @@ async function handleCheckIn() {
   } catch (error) {
     console.error("Location Error:", error.message);
     showMessage("បញ្ហាទីតាំង", error.message, true);
-    updateButtonState();
+    await updateButtonState(); // ហៅម្តងទៀតដើម្បី Reset
     attendanceStatus.classList.remove("animate-pulse");
     return;
   }
@@ -1891,23 +1880,17 @@ async function handleCheckIn() {
   } catch (error) {
     console.error("Check In Error:", error);
     showMessage("បញ្ហា", `មិនអាច Check-in បានទេ: ${error.message}`, true);
-    updateButtonState();
+    await updateButtonState(); // ហៅម្តងទៀតដើម្បី Reset
   } finally {
     attendanceStatus.classList.remove("animate-pulse");
   }
 }
 
+// --- *** កែប្រែ: លុបការពិនិត្យម៉ោង (Shift Check) ចេញ *** ---
 async function handleCheckOut() {
   if (!attendanceCollectionRef) return;
 
-  if (!checkShiftTime(currentUserShift, "checkOut")) {
-    showMessage(
-      "បញ្ហា",
-      `ក្រៅម៉ោង Check-out សម្រាប់វេន "${currentUserShift}" របស់អ្នក។`,
-      true
-    );
-    return;
-  }
+  // Shift time check is already done by updateButtonState()
 
   checkInButton.disabled = true;
   checkOutButton.disabled = true;
@@ -1925,11 +1908,13 @@ async function handleCheckOut() {
         "អ្នកមិនស្ថិតនៅក្នុងទីតាំងកំណត់ទេ។ សូមចូលទៅក្នុងតំបន់ការិយាល័យ រួចព្យាយាមម្តងទៀត។",
         true
       );
-      updateButtonState();
+      // *** កែប្រែ: មិនត្រូវហៅ updateButtonState() ទេ ព្រោះវានឹងបង្កបញ្ហា Loop ***
       attendanceStatus.classList.remove("animate-pulse");
       attendanceStatus.textContent = "បរាជ័យ (ក្រៅទីតាំង)";
       attendanceStatus.className =
         "text-center text-sm text-red-700 pb-4 px-6 h-5";
+      // ត្រូវ Re-enable ប៊ូតុងដោយដៃ
+      await updateButtonState(); // ហៅម្តងទៀតដើម្បី Reset
       return;
     }
 
@@ -1937,7 +1922,7 @@ async function handleCheckOut() {
   } catch (error) {
     console.error("Location Error:", error.message);
     showMessage("បញ្ហាទីតាំង", error.message, true);
-    updateButtonState();
+    await updateButtonState(); // ហៅម្តងទៀតដើម្បី Reset
     attendanceStatus.classList.remove("animate-pulse");
     return;
   }
@@ -1959,11 +1944,12 @@ async function handleCheckOut() {
   } catch (error) {
     console.error("Check Out Error:", error);
     showMessage("បញ្ហា", `មិនអាច Check-out បានទេ: ${error.message}`, true);
-    updateButtonState();
+    await updateButtonState(); // ហៅម្តងទៀតដើម្បី Reset
   } finally {
     attendanceStatus.classList.remove("animate-pulse");
   }
 }
+
 
 function formatTime(date) {
   if (!date) return null;
