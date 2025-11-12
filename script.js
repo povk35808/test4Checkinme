@@ -13,38 +13,46 @@ import {
   collection,
   onSnapshot,
   setLogLevel,
-  query, // << ត្រូវការសម្រាប់ Query ច្បាប់
-  where, // << ត្រូវការសម្រាប់ Query ច្បាប់
-  getDocs, // << ត្រូវការសម្រាប់ Query ច្បាប់
+  query,
+  where,
+  getDocs,
 } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+// *** ថ្មី: នាំចូល Realtime Database (RTDB) ***
+import {
+  getDatabase,
+  ref,
+  onValue,
+} from "https://www.gstatic.com/firebasejs/11.6.1/firebase-database.js";
 
 // --- Global Variables ---
 let dbAttendance, dbLeave, authAttendance;
+let dbAttendanceRTDB; // *** ថ្មី: អថេរសម្រាប់ RTDB ***
 let allEmployees = [];
-let currentMonthRecords = []; // ឥឡូវនេះជាលទ្ធផលចុងក្រោយ (Merged)
-let attendanceRecords = []; // *** ថ្មី: សម្រាប់តែទិន្នន័យ Attendance
-let leaveRecords = []; // *** ថ្មី: សម្រាប់តែទិន្នន័យ Leave
+let currentMonthRecords = [];
+let attendanceRecords = [];
+let leaveRecords = [];
 let currentUser = null;
 let currentUserShift = null;
+let allShiftRules = null; // *** ថ្មី: សម្រាប់រក្សាទុកច្បាប់វេនពី Firebase ***
 let attendanceCollectionRef = null;
 let attendanceListener = null;
-let leaveCollectionListener = null; // *** ថ្មី: Listener សម្រាប់ leave_requests
-let outCollectionListener = null; // *** ថ្មី: Listener សម្រាប់ out_requests
+let leaveCollectionListener = null;
+let outCollectionListener = null;
 let currentConfirmCallback = null;
 
 // --- ថ្មី: អថេរសម្រាប់គ្រប់គ្រង Session (Device Lock) ---
-let sessionCollectionRef = null; // Collection សម្រាប់ active_sessions
-let sessionListener = null; // Listener សម្រាប់ពិនិត្យ "សោ"
-let currentDeviceId = null; // "សោ" របស់ឧបករណ៍នេះ
+let sessionCollectionRef = null;
+let sessionListener = null;
+let currentDeviceId = null;
 
 // --- AI & Camera Global Variables ---
 let modelsLoaded = false;
 let currentUserFaceMatcher = null;
-let currentScanAction = null; // 'checkIn' or 'checkOut'
+let currentScanAction = null;
 let videoStream = null;
 const FACE_MATCH_THRESHOLD = 0.5;
 
-// --- << ថ្មី: Map សម្រាប់បកប្រែ Duration ជាអក្សរខ្មែរ >> ---
+// --- Map សម្រាប់បកប្រែ Duration ជាអក្សរខ្មែរ ---
 const durationMap = {
   មួយថ្ងៃកន្លះ: 1.5,
   ពីរថ្ងៃ: 2,
@@ -65,26 +73,28 @@ const SHEET_ID = "1eRyPoifzyvB4oBmruNyXcoKMKPRqjk6xDD6-bPNW6pc";
 const SHEET_NAME = "DIList";
 const GVIZ_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=${SHEET_NAME}&range=E9:AJ`;
 const COL_INDEX = {
-  ID: 0, // E: អត្តលេខ
-  GROUP: 2, // G: ក្រុម
-  NAME: 7, // L: ឈ្មោះ
-  GENDER: 9, // N: ភេទ
-  GRADE: 13, // R: ថ្នាក់
-  DEPT: 14, // S: ផ្នែកការងារ
-  SHIFT_MON: 24, // AC: ចន្ទ
-  SHIFT_TUE: 25, // AD: អង្គារ៍
-  SHIFT_WED: 26, // AE: ពុធ
-  SHIFT_THU: 27, // AF: ព្រហស្បត្តិ៍
-  SHIFT_FRI: 28, // AG: សុក្រ
-  SHIFT_SAT: 29, // AH: សៅរ៍
-  SHIFT_SUN: 30, // AI: អាទិត្យ
-  PHOTO: 31, // AJ: រូបថត (Link ត្រង់)
+  ID: 0,
+  GROUP: 2,
+  NAME: 7,
+  GENDER: 9,
+  GRADE: 13,
+  DEPT: 14,
+  SHIFT_MON: 24,
+  SHIFT_TUE: 25,
+  SHIFT_WED: 26,
+  SHIFT_THU: 27,
+  SHIFT_FRI: 28,
+  SHIFT_SAT: 29,
+  SHIFT_SUN: 30,
+  PHOTO: 31,
 };
 
 // --- Firebase Configuration (Attendance) ---
 const firebaseConfigAttendance = {
   apiKey: "AIzaSyCgc3fq9mDHMCjTRRHD3BPBL31JkKZgXFc",
   authDomain: "checkme-10e18.firebaseapp.com",
+  // *** ថ្មី: បន្ថែម Database URL សម្រាប់ RTDB ***
+  databaseURL: "https://checkme-10e18-default-rtdb.firebaseio.com",
   projectId: "checkme-10e18",
   storageBucket: "checkme-10e18.firebasestorage.app",
   messagingSenderId: "1030447497157",
@@ -92,7 +102,7 @@ const firebaseConfigAttendance = {
   measurementId: "G-QCJ2JH4WH6",
 };
 
-// --- ថ្មី: Firebase Configuration (Leave Requests) ---
+// --- Firebase Configuration (Leave Requests) ---
 const firebaseConfigLeave = {
   apiKey: "AIzaSyDjr_Ha2RxOWEumjEeSdluIW3JmyM76mVk",
   authDomain: "dipermisstion.firebaseapp.com",
@@ -140,7 +150,6 @@ const checkInButton = document.getElementById("checkInButton");
 const checkOutButton = document.getElementById("checkOutButton");
 const attendanceStatus = document.getElementById("attendanceStatus");
 
-// *** កែប្រែ: យក ID របស់ Container ថ្មី ជំនួស TableBody ***
 const historyContainer = document.getElementById("historyContainer");
 const noHistoryRow = document.getElementById("noHistoryRow");
 const monthlyHistoryContainer = document.getElementById(
@@ -312,54 +321,102 @@ function parseLeaveDate(dateString) {
   }
 }
 
+// --- *** ថ្មី: Function សម្រាប់បំប្លែងម៉ោង (7:00 AM) ទៅជាលេខ (7.0) *** ---
+function convertTimeFormat(timeString) {
+  if (!timeString) return null;
+
+  try {
+    const parts = timeString.match(/(\d+):(\d+)\s(AM|PM)/i);
+    if (!parts) return null;
+
+    let [_, hours, minutes, ampm] = parts;
+    hours = parseInt(hours, 10);
+    minutes = parseInt(minutes, 10);
+
+    if (ampm.toUpperCase() === "PM" && hours !== 12) {
+      hours += 12;
+    }
+    if (ampm.toUpperCase() === "AM" && hours === 12) {
+      hours = 0; // 12 AM is 00:00
+    }
+    return hours + minutes / 60;
+  } catch (e) {
+    console.error("Failed to convert time format:", timeString, e);
+    return null;
+  }
+}
+
+// --- *** ថ្មី: Function នេះត្រូវបានសរសេរឡើងវិញទាំងស្រុង *** ---
 function checkShiftTime(shiftType, checkType) {
+  // 1. ពិនិត្យថាច្បាប់ (Rules) ត្រូវបានទាញយកហើយឬនៅ
+  if (!allShiftRules) {
+    console.warn("Shift rules not loaded from Firebase yet.");
+    return false; // បិទការស្កេន ប្រសិនបើច្បាប់មិនទាន់ផ្ទុក
+  }
+
+  // 2. ពិនិត្យវេន N/A ឬ Uptime (ដូចមុន)
   if (!shiftType || shiftType === "N/A") {
     console.warn(`វេនមិនបានកំណត់ (N/A)។ មិនអនុញ្ញាតឱ្យស្កេន។`);
     return false;
   }
-
   if (shiftType === "Uptime") {
-    return true;
+    return true; // Uptime អាចស្កេនបានគ្រប់ពេល
   }
 
+  // 3. ស្វែងរកច្បាប់សម្រាប់វេននេះ
+  const rules = allShiftRules[shiftType];
+  if (!rules) {
+    console.warn(`វេនមិនស្គាល់: "${shiftType}" (រកមិនឃើញក្នុង Firebase)។`);
+    return false;
+  }
+
+  // 4. យកម៉ោងបច្ចុប្បន្នជាលេខទសភាគ
   const now = new Date();
   const currentHour = now.getHours();
   const currentMinute = now.getMinutes();
   const currentTime = currentHour + currentMinute / 60;
 
-  const shiftRules = {
-    ពេញម៉ោង: {
-      checkIn: [6.83, 10.25],
-      checkOut: [17.5, 20.25],
-    },
-    ពេលយប់: {
-      checkIn: [17.66, 19.25],
-      checkOut: [20.91, 21.83],
-    },
-    មួយព្រឹក: {
-      checkIn: [6.83, 10.25],
-      checkOut: [11.5, 13.25],
-    },
-    មួយរសៀល: {
-      checkIn: [11.83, 14.5],
-      checkOut: [17.5, 20.25],
-    },
-  };
+  // 5. យកម៉ោង Start/End ពី Firebase ផ្អែកលើ checkType
+  let startTimeString, endTimeString;
+  if (checkType === "checkIn") {
+    startTimeString = rules.StartCheckIn;
+    endTimeString = rules.EndCheckin; // ផ្អែកតាមរូបភាព (EndCheckin)
+  } else {
+    // 'checkOut'
+    startTimeString = rules.StartCheckOut;
+    endTimeString = rules.EndCheckOut;
+  }
 
-  const rules = shiftRules[shiftType];
-
-  if (!rules) {
-    console.warn(`វេនមិនស្គាល់: "${shiftType}". មិនអនុញ្ញាតឱ្យស្កេន។`);
+  if (!startTimeString || !endTimeString) {
+    console.warn(
+      `បាត់ Start/End time ក្នុង Firebase សម្រាប់ ${shiftType} -> ${checkType}`
+    );
     return false;
   }
 
-  const [min, max] = rules[checkType];
-  if (currentTime >= min && currentTime <= max) {
-    return true;
+  // 6. បំប្លែងម៉ោង (String) ទៅជាលេខទសភាគ
+  const min = convertTimeFormat(startTimeString);
+  const max = convertTimeFormat(endTimeString);
+
+  if (min === null || max === null) {
+    console.warn(
+      `Format ម៉ោងមិនត្រឹមត្រូវក្នុង Firebase: ${startTimeString} ឬ ${endTimeString}`
+    );
+    return false;
   }
 
+  // 7. ធ្វើការប្រៀបធៀប
+  if (currentTime >= min && currentTime <= max) {
+    return true; // នៅក្នុងម៉ោង
+  }
+
+  // ក្រៅម៉ោង
   console.log(
-    `ក្រៅម៉ោង: ម៉ោងបច្ចុប្បន្ន (${currentTime}) មិនស្ថិតក្នុងចន្លោះ [${min}, ${max}] សម្រាប់វេន "${shiftType}"`
+    `ក្រៅម៉ោង: ម៉ោងបច្ចុប្បន្ន (${currentTime.toFixed(
+      2
+    )}) មិនស្ថិតក្នុងចន្លោះ [${min.toFixed(2)}, ${max.toFixed(
+      2
+    )}] សម្រាប់វេន "${shiftType}"`
   );
   return false;
 }
@@ -427,36 +484,28 @@ function isInsideArea(lat, lon) {
   return isInside;
 }
 
-// --- *** ថ្មី: Helper សម្រាប់ពិនិត្យទិន្នន័យខ្លី/វែង (សម្រាប់ Smart Card) *** ---
 function isShortData(htmlString) {
   if (!htmlString) return true;
-
-  // ប្រសិនបើវាជាច្បាប់ (អក្សរពណ៌ខៀវ), វា "វែង"
   if (htmlString.includes("text-blue-600")) {
     return false;
   }
-
-  // អ្វីផ្សេងទៀត (ម៉ោងពណ៌បៃតង, ម៉ោងពណ៌ក្រហម, "អវត្តមាន" ពណ៌ក្រហម, "---" ពណ៌ប្រផេះ) គឺ "ខ្លី"
   return true;
 }
 
-// --- Function សម្រាប់ទាញទិន្នន័យច្បាប់ (Leave) ទាំងអស់ក្នុងខែ ---
 async function fetchAllLeaveForMonth(employeeId) {
-  if (!dbLeave) return []; // ត្រឡប់អារេទទេ ប្រសិនបើ dbLeave មិនទាន់រួចរាល់
+  if (!dbLeave) return [];
 
   const leaveCollectionPath =
     "/artifacts/default-app-id/public/data/leave_requests";
   const outCollectionPath =
     "/artifacts/default-app-id/public/data/out_requests";
 
-  // យកថ្ងៃទី 1 និងថ្ងៃចុងក្រោយនៃខែបច្ចុប្បន្ន
-  const { startOfMonth, endOfMonth } = getCurrentMonthRange(); // e.g., "2025-11-01", "2025-11-30"
+  const { startOfMonth, endOfMonth } = getCurrentMonthRange();
   const startMonthDate = new Date(startOfMonth + "T00:00:00");
   const endMonthDate = new Date(endOfMonth + "T23:59:59");
 
   let allLeaveRecords = [];
 
-  // 1. ទាញ 'leave_requests' (ច្បាប់វែង, ច្បាប់ឈឺ, ច្បាប់ប្រចាំឆ្នាំ)
   try {
     const qLeave = query(
       collection(dbLeave, leaveCollectionPath),
@@ -467,8 +516,8 @@ async function fetchAllLeaveForMonth(employeeId) {
 
     leaveSnapshot.forEach((doc) => {
       const data = doc.data();
-      const startDate = parseLeaveDate(data.startDate); // ប្រើ Function ដែលមានស្រាប់
-      if (!startDate) return; // បរាជ័យក្នុងការបំប្លែងកាលបរិច្ឆេទ
+      const startDate = parseLeaveDate(data.startDate);
+      if (!startDate) return;
 
       const durationStr = data.duration;
       const reason = data.reason || "(មិនមានមូលហេតុ)";
@@ -476,30 +525,26 @@ async function fetchAllLeaveForMonth(employeeId) {
       const isMultiDay = !isNaN(durationNum);
 
       if (isMultiDay) {
-        // សម្រាប់ច្បាប់ច្រើនថ្ងៃ (e.g., 1.5, 2, 2.5)
         const daysToSpan = Math.ceil(durationNum);
         for (let i = 0; i < daysToSpan; i++) {
           const currentLeaveDate = new Date(startDate);
           currentLeaveDate.setDate(startDate.getDate() + i);
 
-          // ពិនិត្យមើលថាតើថ្ងៃឈប់សម្រាកនេះ ស្ថិតនៅក្នុងខែបច្ចុប្បន្នឬអត់
           if (
             currentLeaveDate >= startMonthDate &&
             currentLeaveDate <= endMonthDate
           ) {
             let leaveType = `ច្បាប់ ${durationStr}`;
-            const isHalfDay = durationNum % 1 !== 0; // ពិនិត្យមើលថាតើជាច្បាប់ .5 (កន្លះថ្ងៃ)
+            const isHalfDay = durationNum % 1 !== 0;
 
             if (isHalfDay && i === daysToSpan - 1) {
-              // នេះគឺជាថ្ងៃចុងក្រោយនៃច្បាប់ ហើយវាជាកន្លះថ្ងៃ (ព្រឹក)
               allLeaveRecords.push({
-                date: getTodayDateString(currentLeaveDate), // YYYY-MM-DD
-                formattedDate: formatDate(currentLeaveDate), // DD-Mon-YYYY
+                date: getTodayDateString(currentLeaveDate),
+                formattedDate: formatDate(currentLeaveDate),
                 checkIn: `${leaveType} (${reason})`,
-                checkOut: null, // ត្រូវ Check-out ពេលរសៀល
+                checkOut: null,
               });
             } else {
-              // នេះគឺជាច្បាប់ពេញមួយថ្ងៃ
               allLeaveRecords.push({
                 date: getTodayDateString(currentLeaveDate),
                 formattedDate: formatDate(currentLeaveDate),
@@ -510,7 +555,6 @@ async function fetchAllLeaveForMonth(employeeId) {
           }
         }
       } else {
-        // សម្រាប់ច្បាប់ថ្ងៃតែមួយ (e.g., "មួយថ្ងៃ", "មួយព្រឹក")
         if (startDate >= startMonthDate && startDate <= endMonthDate) {
           const dateStr = getTodayDateString(startDate);
           const formatted = formatDate(startDate);
@@ -545,7 +589,6 @@ async function fetchAllLeaveForMonth(employeeId) {
     console.error("Error fetching 'leave_requests' for month", e);
   }
 
-  // 2. ទាញ 'out_requests' (ច្បាប់ចេញក្រៅ)
   try {
     const qOut = query(
       collection(dbLeave, outCollectionPath),
@@ -556,7 +599,7 @@ async function fetchAllLeaveForMonth(employeeId) {
 
     outSnapshot.forEach((doc) => {
       const data = doc.data();
-      const startDate = parseLeaveDate(data.startDate); // សន្មត់ថាមាន Format "DD-Mon-YYYY"
+      const startDate = parseLeaveDate(data.startDate);
       if (!startDate) return;
 
       if (startDate >= startMonthDate && startDate <= endMonthDate) {
@@ -597,20 +640,16 @@ async function fetchAllLeaveForMonth(employeeId) {
   return allLeaveRecords;
 }
 
-// --- Function សម្រាប់បញ្ចូលគ្នានូវទិន្នន័យវត្តមាន និងច្បាប់ ---
 function mergeAttendanceAndLeave(attendanceRecords, leaveRecords) {
   const mergedMap = new Map();
 
-  // 1. បញ្ចូលទិន្នន័យវត្តមាន (Check-in/Out) មុន
   for (const record of attendanceRecords) {
     mergedMap.set(record.date, { ...record });
   }
 
-  // 2. បញ្ចូល ឬ Update ជាមួយទិន្នន័យច្បាប់
   for (const leave of leaveRecords) {
     const existing = mergedMap.get(leave.date);
     if (existing) {
-      // ប្រសិនបើមានទិន្នន័យវត្តមាន, យើងគ្រាន់តែបំពេញកន្លែងទំនេរ
       if (leave.checkIn && !existing.checkIn) {
         existing.checkIn = leave.checkIn;
       }
@@ -618,7 +657,6 @@ function mergeAttendanceAndLeave(attendanceRecords, leaveRecords) {
         existing.checkOut = leave.checkOut;
       }
     } else {
-      // ប្រសិនបើមិនមានទិន្នន័យវត្តមានទាល់តែសោះ, បញ្ចូលទិន្នន័យច្បាប់ថ្មី
       mergedMap.set(leave.date, { ...leave });
     }
   }
@@ -626,12 +664,9 @@ function mergeAttendanceAndLeave(attendanceRecords, leaveRecords) {
   return Array.from(mergedMap.values());
 }
 
-// --- *** ថ្មី: Function សម្រាប់ merge និង render UI (កែប្រែ) *** ---
-async function mergeAndRenderHistory() { // <-- ធ្វើឱ្យវា async
-  // 1. Merge the two global arrays
+async function mergeAndRenderHistory() {
   currentMonthRecords = mergeAttendanceAndLeave(attendanceRecords, leaveRecords);
 
-  // 2. Sort
   const todayString = getTodayDateString();
   currentMonthRecords.sort((a, b) => {
     const aDate = a.date || "";
@@ -652,10 +687,9 @@ async function mergeAndRenderHistory() { // <-- ធ្វើឱ្យវា asyn
     `History Rendered: ${currentMonthRecords.length} records (Merged).`
   );
 
-  // 3. Render
   renderTodayHistory();
   renderMonthlyHistory();
-  await updateButtonState(); // <-- បន្ថែម await
+  await updateButtonState();
 }
 
 // --- AI & Camera Functions ---
@@ -738,10 +772,6 @@ async function checkLeaveStatus(employeeId, checkType) {
   const leaveCollectionPath =
     "/artifacts/default-app-id/public/data/out_requests";
 
-  console.log(
-    `Checking [out_requests] for ID: ${employeeId} on Date: ${todayString}`
-  );
-
   const q = query(
     collection(dbLeave, leaveCollectionPath),
     where("userId", "==", employeeId),
@@ -752,15 +782,12 @@ async function checkLeaveStatus(employeeId, checkType) {
   try {
     const querySnapshot = await getDocs(q);
     if (querySnapshot.empty) {
-      console.log("No [out_requests] found for today.");
       return null;
     }
 
     const leaveData = querySnapshot.docs[0].data();
     const leaveType = leaveData.duration || "N/A";
     const reason = leaveData.reason || "(មិនមានមូលហេតុ)";
-
-    console.log(`Found [out_requests] leave: ${leaveType} (Reason: ${reason})`);
 
     if (leaveType === "មួយថ្ងៃ") {
       return { blocked: true, reason: `ច្បាប់ចេញក្រៅមួយថ្ងៃ (${reason})` };
@@ -799,8 +826,6 @@ async function checkFullLeaveStatus(employeeId, checkType) {
 
   const todayString_DD_Mon_YYYY = formatDate(today);
 
-  console.log(`Checking [leave_requests] for ID: ${employeeId}`);
-
   const q = query(
     collection(dbLeave, leaveCollectionPath),
     where("userId", "==", employeeId),
@@ -810,7 +835,6 @@ async function checkFullLeaveStatus(employeeId, checkType) {
   try {
     const querySnapshot = await getDocs(q);
     if (querySnapshot.empty) {
-      console.log("No [leave_requests] found for this user.");
       return null;
     }
 
@@ -826,10 +850,6 @@ async function checkFullLeaveStatus(employeeId, checkType) {
       if (isMultiDay) {
         const startLeaveDate = parseLeaveDate(startDateStr);
         if (!startLeaveDate) {
-          console.warn(
-            "Could not parse start date for multi-day leave:",
-            startDateStr
-          );
           continue;
         }
 
@@ -856,13 +876,10 @@ async function checkFullLeaveStatus(employeeId, checkType) {
               continue;
             }
           }
-
-          console.log(`Block: Multi-day leave found (${durationStr})`);
           return { blocked: true, reason: `ច្បាប់ ${durationStr} (${reason})` };
         }
       } else {
         if (startDateStr === todayString_DD_Mon_YYYY) {
-          console.log(`Found single-day leave for today: ${durationStr}`);
           if (durationStr === "មួយថ្ងៃ" || durationStr === "មួយយប់") {
             return {
               blocked: true,
@@ -877,7 +894,7 @@ async function checkFullLeaveStatus(employeeId, checkType) {
           }
         }
       }
-    } // end for loop
+    }
 
     return null;
   } catch (error) {
@@ -891,7 +908,6 @@ async function checkFullLeaveStatus(employeeId, checkType) {
   }
 }
 
-// --- *** កែប្រែ: លុបការពិនិត្យច្បាប់ (Leave Check) ចេញ *** ---
 async function startFaceScan(action) {
   currentScanAction = action;
 
@@ -913,8 +929,6 @@ async function startFaceScan(action) {
     return;
   }
 
-  // Leave and Shift checks are now done by updateButtonState()
-  
   cameraLoadingText.textContent = "កំពុងស្នើសុំកាមេរ៉ា...";
   cameraHelpText.textContent = "សូមអនុញ្ញាតឱ្យប្រើប្រាស់កាមេរ៉ា";
   captureButton.style.display = "none";
@@ -1038,11 +1052,13 @@ async function handleCaptureAndAnalyze() {
 
 // --- Main Functions ---
 
+// --- *** កែប្រែ: បន្ថែម dbAttendanceRTDB *** ---
 async function initializeAppFirebase() {
   try {
     const attendanceApp = initializeApp(firebaseConfigAttendance);
     dbAttendance = getFirestore(attendanceApp);
     authAttendance = getAuth(attendanceApp);
+    dbAttendanceRTDB = getDatabase(attendanceApp); // *** ថ្មី ***
 
     sessionCollectionRef = collection(dbAttendance, "active_sessions");
 
@@ -1064,11 +1080,45 @@ async function initializeAppFirebase() {
   }
 }
 
+// --- *** ថ្មី: បង្កើត Function សម្រាប់ទាញយកច្បាប់វេន *** ---
+function fetchShiftRules() {
+  if (!dbAttendanceRTDB) return;
+
+  const rulesRef = ref(dbAttendanceRTDB, "វេនធ្វើការ"); // ផ្អែកតាមរូបភាព
+
+  onValue(
+    rulesRef,
+    (snapshot) => {
+      if (snapshot.exists()) {
+        allShiftRules = snapshot.val();
+        console.log("Firebase Shift Rules Loaded:", allShiftRules);
+        // បន្ទាប់ពីទាញច្បាប់វេនរួច យើងត្រូវ Update ស្ថានភាពប៊ូតុង
+        if (currentUser) {
+          mergeAndRenderHistory();
+        }
+      } else {
+        console.error("មិនអាចរកឃើញ 'វេនធ្វើការ' នៅក្នុង Realtime Database!");
+        showMessage(
+          "បញ្ហាកំណត់វេន",
+          "មិនអាចទាញយកច្បាប់វេនការងារពី Firebase បានទេ។",
+          true
+        );
+      }
+    },
+    (error) => {
+      console.error("Firebase RTDB Error:", error);
+      showMessage("បញ្ហា RTDB", `មិនអាចភ្ជាប់ RTDB បានទេ: ${error.message}`, true);
+    }
+  );
+}
+
+// --- *** កែប្រែ: បន្ថែមការហៅ fetchShiftRules() *** ---
 async function setupAuthListener() {
   return new Promise((resolve, reject) => {
     onAuthStateChanged(authAttendance, async (user) => {
       if (user) {
         console.log("Firebase Auth user signed in:", user.uid);
+        fetchShiftRules(); // *** ថ្មី: ទាញច្បាប់វេន ***
         await loadAIModels();
         resolve();
       } else {
@@ -1391,7 +1441,6 @@ function forceLogout(message) {
   customModal.classList.add("modal-visible");
 }
 
-// --- *** ថ្មី: Function សម្រាប់ស្តាប់ទិន្នន័យច្បាប់ (Leave) *** ---
 function startLeaveListeners() {
   if (!dbLeave || !currentUser) return;
 
@@ -1406,14 +1455,11 @@ function startLeaveListeners() {
   const employeeId = currentUser.id;
 
   const reFetchAllLeave = async () => {
-    // 1. Re-fetch ALL leave data
     leaveRecords = await fetchAllLeaveForMonth(employeeId);
     console.log(`Real-time Leave Updated: ${leaveRecords.length} records.`);
-    // 2. Call merge and render
-    await mergeAndRenderHistory(); // <-- បន្ថែម await
+    await mergeAndRenderHistory();
   };
 
-  // Listener 1: For 'leave_requests'
   const qLeave = query(
     collection(dbLeave, leaveCollectionPath),
     where("userId", "==", employeeId)
@@ -1434,7 +1480,6 @@ function startLeaveListeners() {
     }
   );
 
-  // Listener 2: For 'out_requests'
   const qOut = query(
     collection(dbLeave, outCollectionPath),
     where("userId", "==", employeeId)
@@ -1452,12 +1497,11 @@ function startLeaveListeners() {
   );
 }
 
-// --- *** កែប្រែ: Function នេះឥឡូវស្តាប់តែ Attendance ប៉ុណ្ណោះ *** ---
 function setupAttendanceListener() {
   if (!attendanceCollectionRef) return;
 
   if (attendanceListener) {
-    attendanceListener(); // Stop old listener
+    attendanceListener();
   }
 
   checkInButton.disabled = true;
@@ -1468,7 +1512,7 @@ function setupAttendanceListener() {
 
   attendanceListener = onSnapshot(
     attendanceCollectionRef,
-    async (querySnapshot) => { // <-- បន្ថែម async
+    async (querySnapshot) => {
       let allRecords = [];
       querySnapshot.forEach((doc) => {
         allRecords.push(doc.data());
@@ -1476,7 +1520,6 @@ function setupAttendanceListener() {
 
       const { startOfMonth, endOfMonth } = getCurrentMonthRange();
 
-      // 1. Update the global attendanceRecords
       attendanceRecords = allRecords.filter(
         (record) => record.date >= startOfMonth && record.date <= endOfMonth
       );
@@ -1485,8 +1528,7 @@ function setupAttendanceListener() {
         `Real-time Attendance Updated: ${attendanceRecords.length} records.`
       );
 
-      // 2. Call the merge and render function
-      await mergeAndRenderHistory(); // <-- បន្ថែម await
+      await mergeAndRenderHistory();
     },
     (error) => {
       console.error("Error listening to attendance:", error);
@@ -1501,9 +1543,9 @@ function setupAttendanceListener() {
 function renderMonthlyHistory() {
   const container = document.getElementById("monthlyHistoryContainer");
   const noDataRow = document.getElementById("noMonthlyHistoryRow");
-  if (!container || !noDataRow) return; // បង្ការ Error
+  if (!container || !noDataRow) return;
   
-  container.innerHTML = ""; // លុប Card ចាស់ៗចេញ
+  container.innerHTML = "";
 
   if (currentMonthRecords.length === 0) {
     container.appendChild(noDataRow);
@@ -1516,7 +1558,6 @@ function renderMonthlyHistory() {
     const formattedDate = record.formattedDate || record.date;
     const isToday = record.date === todayString;
 
-    // --- បង្កើត String សម្រាប់បង្ហាញ (ដូចមុន) ---
     let checkInDisplay;
     if (record.checkIn) {
       if (record.checkIn.includes("AM") || record.checkIn.includes("PM")) {
@@ -1543,11 +1584,9 @@ function renderMonthlyHistory() {
         : '<span class="text-red-500 font-semibold">អវត្តមាន</span>';
     }
 
-    // --- *** ថ្មី: "Smart" Card Layout Logic *** ---
     const isCheckInShort = isShortData(checkInDisplay);
     const isCheckOutShort = isShortData(checkOutDisplay);
 
-    // ប្រសិនបើ ទាំង "ចូល" និង "ចេញ" ខ្លី, ប្រើ Layout "2 ជួរ"
     const useCompactLayout = isCheckInShort && isCheckOutShort;
 
     const card = document.createElement("div");
@@ -1556,7 +1595,6 @@ function renderMonthlyHistory() {
     let contentHTML = "";
 
     if (useCompactLayout) {
-      // Layout "2 ជួរ" (សម្រាប់ទិន្នន័យខ្លី)
       contentHTML = `
         <p class="text-sm font-semibold text-gray-800 mb-2">${formattedDate}</p>
         <div class="grid grid-cols-2 gap-2">
@@ -1569,7 +1607,6 @@ function renderMonthlyHistory() {
         </div>
       `;
     } else {
-      // Layout "3 ជួរ" (សម្រាប់ទិន្នន័យវែង)
       contentHTML = `
         <p class="text-sm font-semibold text-gray-800 mb-3">${formattedDate}</p>
         <div class="flex flex-col space-y-2 text-sm">
@@ -1584,12 +1621,11 @@ function renderMonthlyHistory() {
         </div>
       `;
 
-      // ករណីពិសេស: បើជាច្បាប់ពេញមួយថ្ងៃ (អក្សរ "ចូល" និង "ចេញ" ដូចគ្នា)
       if (
         record.checkIn &&
         record.checkOut &&
         record.checkIn === record.checkOut &&
-        !isCheckInShort // ហើយវាជាអក្សរវែង
+        !isCheckInShort
       ) {
         contentHTML = `
           <p class="text-sm font-semibold text-gray-800 mb-2">${formattedDate}</p>
@@ -1608,9 +1644,9 @@ function renderMonthlyHistory() {
 function renderTodayHistory() {
   const container = document.getElementById("historyContainer");
   const noDataRow = document.getElementById("noHistoryRow");
-  if (!container || !noDataRow) return; // បង្ការ Error
+  if (!container || !noDataRow) return;
 
-  container.innerHTML = ""; // លុប Card ចាស់ៗចេញ
+  container.innerHTML = "";
 
   const todayString = getTodayDateString();
   const todayRecord = currentMonthRecords.find(
@@ -1624,7 +1660,6 @@ function renderTodayHistory() {
 
   const formattedDate = todayRecord.formattedDate || todayRecord.date;
 
-  // --- បង្កើត String សម្រាប់បង្ហាញ (ដូចមុន) ---
   let checkInDisplay;
   if (todayRecord.checkIn) {
     if (
@@ -1653,22 +1688,18 @@ function renderTodayHistory() {
     checkOutDisplay = '<span class="text-gray-400">មិនទាន់ចេញ</span>';
   }
 
-  // --- *** ថ្មី: "Smart" Card Layout Logic *** ---
   const isCheckInShort = isShortData(checkInDisplay);
   const isCheckOutShort = isShortData(checkOutDisplay);
 
-  // ប្រសិនបើ ទាំង "ចូល" និង "ចេញ" ខ្លី, ប្រើ Layout "2 ជួរ"
   const useCompactLayout = isCheckInShort && isCheckOutShort;
 
   const card = document.createElement("div");
-  // យើងអាចធ្វើឱ្យ Card ថ្ងៃនេះ មើលទៅពិសេសបន្តិច (ឧ. ផ្ទៃពណ៌ខៀវอ่อน)
   card.className =
     "bg-blue-50 p-4 rounded-lg shadow border border-blue-200";
 
   let contentHTML = "";
 
   if (useCompactLayout) {
-    // Layout "2 ជួរ" (សម្រាប់ទិន្នន័យខ្លី)
     contentHTML = `
       <p class="text-sm font-semibold text-blue-800 mb-2">${formattedDate}</p>
       <div class="grid grid-cols-2 gap-2">
@@ -1681,7 +1712,6 @@ function renderTodayHistory() {
       </div>
     `;
   } else {
-    // Layout "3 ជួរ" (សម្រាប់ទិន្នន័យវែង)
     contentHTML = `
       <p class="text-sm font-semibold text-blue-800 mb-3">${formattedDate}</p>
       <div class="flex flex-col space-y-2 text-sm">
@@ -1696,12 +1726,11 @@ function renderTodayHistory() {
       </div>
     `;
 
-    // ករណីពិសេស: បើជាច្បាប់ពេញមួយថ្ងៃ (អក្សរ "ចូល" និង "ចេញ" ដូចគ្នា)
     if (
       todayRecord.checkIn &&
       todayRecord.checkOut &&
       todayRecord.checkIn === todayRecord.checkOut &&
-      !isCheckInShort // ហើយវាជាអក្សរវែង
+      !isCheckInShort
     ) {
       contentHTML = `
         <p class="text-sm font-semibold text-blue-800 mb-2">${formattedDate}</p>
@@ -1716,7 +1745,7 @@ function renderTodayHistory() {
   container.appendChild(card);
 }
 
-// --- *** កែប្រែ: Function នេះត្រូវបានសរសេរឡើងវិញទាំងស្រុង *** ---
+// --- *** ថ្មី: Function នេះត្រូវបានសរសេរឡើងវិញទាំងស្រុង *** ---
 async function updateButtonState() {
   const todayString = getTodayDateString();
   const todayData = currentMonthRecords.find(
@@ -1811,11 +1840,10 @@ async function updateButtonState() {
 }
 
 
-// --- *** កែប្រែ: លុបការពិនិត្យម៉ោង (Shift Check) ចេញ *** ---
 async function handleCheckIn() {
   if (!attendanceCollectionRef || !currentUser) return;
 
-  // Shift time check is already done by updateButtonState()
+  // Shift check is done by updateButtonState()
 
   checkInButton.disabled = true;
   checkOutButton.disabled = true;
@@ -1833,13 +1861,11 @@ async function handleCheckIn() {
         "អ្នកមិនស្ថិតនៅក្នុងទីតាំងកំណត់ទេ។ សូមចូលទៅក្នុងតំបន់ការិយាល័យ រួចព្យាយាមម្តងទៀត។",
         true
       );
-      // *** កែប្រែ: មិនត្រូវហៅ updateButtonState() ទេ ព្រោះវានឹងបង្កបញ្ហា Loop ***
       attendanceStatus.classList.remove("animate-pulse");
       attendanceStatus.textContent = "បរាជ័យ (ក្រៅទីតាំង)";
       attendanceStatus.className =
         "text-center text-sm text-red-700 pb-4 px-6 h-5";
-      // ត្រូវ Re-enable ប៊ូតុងដោយដៃ
-      await updateButtonState(); // ហៅម្តងទៀតដើម្បី Reset
+      await updateButtonState();
       return;
     }
 
@@ -1847,7 +1873,7 @@ async function handleCheckIn() {
   } catch (error) {
     console.error("Location Error:", error.message);
     showMessage("បញ្ហាទីតាំង", error.message, true);
-    await updateButtonState(); // ហៅម្តងទៀតដើម្បី Reset
+    await updateButtonState();
     attendanceStatus.classList.remove("animate-pulse");
     return;
   }
@@ -1880,17 +1906,16 @@ async function handleCheckIn() {
   } catch (error) {
     console.error("Check In Error:", error);
     showMessage("បញ្ហា", `មិនអាច Check-in បានទេ: ${error.message}`, true);
-    await updateButtonState(); // ហៅម្តងទៀតដើម្បី Reset
+    await updateButtonState();
   } finally {
     attendanceStatus.classList.remove("animate-pulse");
   }
 }
 
-// --- *** កែប្រែ: លុបការពិនិត្យម៉ោង (Shift Check) ចេញ *** ---
 async function handleCheckOut() {
   if (!attendanceCollectionRef) return;
 
-  // Shift time check is already done by updateButtonState()
+  // Shift check is done by updateButtonState()
 
   checkInButton.disabled = true;
   checkOutButton.disabled = true;
@@ -1908,13 +1933,11 @@ async function handleCheckOut() {
         "អ្នកមិនស្ថិតនៅក្នុងទីតាំងកំណត់ទេ។ សូមចូលទៅក្នុងតំបន់ការិយាល័យ រួចព្យាយាមម្តងទៀត។",
         true
       );
-      // *** កែប្រែ: មិនត្រូវហៅ updateButtonState() ទេ ព្រោះវានឹងបង្កបញ្ហា Loop ***
       attendanceStatus.classList.remove("animate-pulse");
       attendanceStatus.textContent = "បរាជ័យ (ក្រៅទីតាំង)";
       attendanceStatus.className =
         "text-center text-sm text-red-700 pb-4 px-6 h-5";
-      // ត្រូវ Re-enable ប៊ូតុងដោយដៃ
-      await updateButtonState(); // ហៅម្តងទៀតដើម្បី Reset
+      await updateButtonState();
       return;
     }
 
@@ -1922,7 +1945,7 @@ async function handleCheckOut() {
   } catch (error) {
     console.error("Location Error:", error.message);
     showMessage("បញ្ហាទីតាំង", error.message, true);
-    await updateButtonState(); // ហៅម្តងទៀតដើម្បី Reset
+    await updateButtonState();
     attendanceStatus.classList.remove("animate-pulse");
     return;
   }
@@ -1944,12 +1967,11 @@ async function handleCheckOut() {
   } catch (error) {
     console.error("Check Out Error:", error);
     showMessage("បញ្ហា", `មិនអាច Check-out បានទេ: ${error.message}`, true);
-    await updateButtonState(); // ហៅម្តងទៀតដើម្បី Reset
+    await updateButtonState();
   } finally {
     attendanceStatus.classList.remove("animate-pulse");
   }
 }
-
 
 function formatTime(date) {
   if (!date) return null;
