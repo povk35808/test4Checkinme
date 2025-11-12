@@ -1514,7 +1514,7 @@ function setupAttendanceListener() {
 function renderMonthlyHistory() {
   monthlyHistoryTableBody.innerHTML = "";
 
-  if (noMonthlyHistoryRow) {
+  if (noHistoryRow) {
     noMonthlyHistoryRow.cells[0].textContent = "មិនទាន់មានទិន្នន័យ";
   }
 
@@ -1557,12 +1557,12 @@ function renderMonthlyHistory() {
     }
 
     const row = document.createElement("tr");
-    row.className = "hover:bg-gray-50";
+    row.className = "hover:bg-gray-50"; // CSS ថ្មីនឹង override នេះសម្រាប់ទូរស័ព្ទ
     row.innerHTML = `
-              <td class="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-800">${formattedDate}</td>
-              <td class="px-4 py-3 whitespace-nowrap text-sm">${checkInDisplay}</td>
-              <td class="px-4 py-3 whitespace-nowrap text-sm">${checkOutDisplay}</td>
-          `;
+        <td class="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-800">${formattedDate}</td>
+        <td class="px-4 py-3 whitespace-nowrap text-sm">${checkInDisplay}</td>
+        <td class="px-4 py-3 whitespace-nowrap text-sm">${checkOutDisplay}</td>
+    `;
     monthlyHistoryTableBody.appendChild(row);
   });
 }
@@ -1615,12 +1615,12 @@ function renderTodayHistory() {
   }
 
   const row = document.createElement("tr");
-  row.className = "hover:bg-gray-50";
+  row.className = "hover:bg-gray-50"; // CSS ថ្មីនឹង override នេះសម្រាប់ទូរស័ព្ទ
   row.innerHTML = `
-        <td class="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-800">${formattedDate}</td>
-        <td class="px-4 py-3 whitespace-nowrap text-sm">${checkInDisplay}</td>
-        <td class="px-4 py-3 whitespace-nowrap text-sm">${checkOutDisplay}</td>
-    `;
+      <td class="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-800">${formattedDate}</td>
+      <td class="px-4 py-3 whitespace-nowrap text-sm">${checkInDisplay}</td>
+      <td class="px-4 py-3 whitespace-nowrap text-sm">${checkOutDisplay}</td>
+  `;
   historyTableBody.appendChild(row);
 }
 
