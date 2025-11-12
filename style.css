@@ -148,3 +148,119 @@ body {
 }
 
 /* --- *** ចប់ Styles សម្រាប់ Footer Navigation Bar *** --- */
+
+
+/* --- *** ថ្មី: Styles សម្រាប់តារាងវត្តមានបែប Hybrid (Responsive Table) *** --- */
+
+@media (max-width: 400px) {
+  /* យើងកំណត់គោលដៅលើអេក្រង់តូចជាង 400px (ទូរស័ព្ទភាគច្រើន) */
+
+  /* 1. លាក់ក្បាលតារាង (thead) ដើម តែទុកឱ្យវារក្សាកន្លែង */
+  #historyTableBody thead,
+  #monthlyHistoryTableBody thead {
+    visibility: collapse; /* លាក់តែមើលមិនឃើញ តែនៅស៊ីកន្លែង */
+  }
+
+  /* 2. កំណត់ឱ្យ <tbody>, <tr>, <td> បង្ហាញជា Block (ដូច Card) */
+  #historyTableBody,
+  #monthlyHistoryTableBody,
+  #historyTableBody tr,
+  #monthlyHistoryTableBody tr,
+  #historyTableBody td,
+  #monthlyHistoryTableBody td {
+    display: block;
+    width: 100% !important;
+  }
+
+  /* 3. រចនា <tr> (แถว) ឱ្យដូចជា Card មួយ */
+  #historyTableBody tr,
+  #monthlyHistoryTableBody tr {
+    border-bottom: 1px solid #e5e7eb; /* border-gray-200 */
+    padding: 0.75rem 0.5rem; /* 12px top/bottom, 8px left/right */
+  }
+  
+  #historyTableBody tr:last-child,
+  #monthlyHistoryTableBody tr:last-child {
+      border-bottom: none;
+  }
+
+  /* 4. ដក padding ដើមរបស់ <td> ចេញ */
+  #historyTableBody td,
+  #monthlyHistoryTableBody td {
+    padding: 0.25rem 0; /* 4px top/bottom, 0 left/right */
+    white-space: normal; /* អនុញ្ញាតឱ្យអក្សរវែងៗ បាក់ជួរ */
+    height: auto;
+    border: none;
+  }
+
+  /* 5. រចនា <td> ទី 1 (កាលបរិច្ឆេទ) ឱ្យដូចជា Title */
+  #historyTableBody tr td:nth-child(1),
+  #monthlyHistoryTableBody tr td:nth-child(1) {
+    font-weight: 600; /* font-semibold */
+    color: #1f2937; /* text-gray-800 */
+    font-size: 0.875rem; /* text-sm */
+    margin-bottom: 0.25rem; /* 4px */
+  }
+
+  /* 6. រចនា <td> ទី 2 (ចូល) និង ទី 3 (ចេញ) 
+     យើងប្រើ grid ដើម្បីឱ្យ Label និង Value ត្រង់ជួរគ្នា */
+  #historyTableBody tr td:nth-child(2),
+  #monthlyHistoryTableBody tr td:nth-child(2),
+  #historyTableBody tr td:nth-child(3),
+  #monthlyHistoryTableBody tr td:nth-child(3) {
+    font-size: 0.875rem; /* text-sm */
+    display: grid;
+    grid-template-columns: 50px 1fr; /* 50px សម្រាប់ Label, 1fr សម្រាប់ Value */
+    align-items: start;
+  }
+
+  /* 7. ប្រើ pseudo-elements ដើម្បីបន្ថែម Label "ចូល:" និង "ចេញ:" */
+  #historyTableBody tr td:nth-child(2)::before,
+  #monthlyHistoryTableBody tr td:nth-child(2)::before {
+    content: "ចូល:";
+    font-weight: 500;
+    color: #4b5563; /* text-gray-600 */
+  }
+
+  #historyTableBody tr td:nth-child(3)::before,
+  #monthlyHistoryTableBody tr td:nth-child(3)::before {
+    content: "ចេញ:";
+    font-weight: 500;
+    color: #4b5563; /* text-gray-600 */
+  }
+
+  /* 8. ករណីពិសេសសម្រាប់ "អវត្តមាន" ឬ "មិនទាន់ចេញ" 
+     (CSS មុន គ្រប់គ្រង span, តែយើងត្រូវគ្រប់គ្រង text ផ្ទាល់) */
+  #historyTableBody tr td:nth-child(2):has(span.text-red-500)::before,
+  #monthlyHistoryTableBody tr td:nth-child(2):has(span.text-red-500)::before {
+     content: "ចូល:";
+  }
+  
+  #historyTableBody tr td:nth-child(3):has(span.text-gray-400)::before,
+  #monthlyHistoryTableBody tr td:nth-child(3):has(span.text-gray-400)::before,
+  #historyTableBody tr td:nth-child(3):has(span.text-red-500)::before,
+  #monthlyHistoryTableBody tr td:nth-child(3):has(span.text-red-500)::before {
+    content: "ចេញ:"; 
+  }
+
+  /* 9. លាក់ Label សម្រាប់ "ច្បាប់" (ព្រោះវារួមបញ្ចូលក្នុងអក្សរហើយ) 
+     យើងនឹងគ្រប់គ្រងវានៅក្នុង JavaScript ជំនួសវិញ ដើម្បីឱ្យកាន់តែច្បាស់លាស់ */
+
+  /* 10. កែតម្រូវแถว (row) "មិនទាន់មានទិន្នន័យ" */
+  #noHistoryRow td,
+  #noMonthlyHistoryRow td {
+    display: block;
+    text-align: center;
+    padding: 1rem;
+    font-weight: 500;
+    color: #6b7280; /* text-gray-500 */
+    grid-template-columns: 1fr; /* Reset grid */
+  }
+
+  /* 11. លាក់ Label សម្រាប់ "មិនទាន់មានទិន្នន័យ" */
+  #noHistoryRow td::before,
+  #noMonthlyHistoryRow td::before {
+    display: none;
+  }
+}
+/* --- *** ចប់ Styles សម្រាប់តារាង Hybrid *** --- */
