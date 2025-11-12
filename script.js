@@ -140,10 +140,11 @@ const checkInButton = document.getElementById("checkInButton");
 const checkOutButton = document.getElementById("checkOutButton");
 const attendanceStatus = document.getElementById("attendanceStatus");
 
-const historyTableBody = document.getElementById("historyTableBody");
+// *** កែប្រែ: យក ID របស់ Container ថ្មី ជំនួស TableBody ***
+const historyContainer = document.getElementById("historyContainer");
 const noHistoryRow = document.getElementById("noHistoryRow");
-const monthlyHistoryTableBody = document.getElementById(
-  "monthlyHistoryTableBody"
+const monthlyHistoryContainer = document.getElementById(
+  "monthlyHistoryContainer"
 );
 const noMonthlyHistoryRow = document.getElementById("noMonthlyHistoryRow");
 
@@ -1310,6 +1311,7 @@ async function selectUser(employee) {
   searchInput.value = "";
 }
 
+// --- *** កែប្រែ: Function នេះត្រូវបានកែប្រែ *** ---
 function logout() {
   currentUser = null;
   currentUserShift = null;
@@ -1345,16 +1347,24 @@ function logout() {
   attendanceRecords = []; // <-- *** ថ្មី: Reset ***
   leaveRecords = []; // <-- *** ថ្មី: Reset ***
 
-  historyTableBody.innerHTML = "";
-  if (noHistoryRow) {
-    noHistoryRow.cells[0].textContent = "មិនទាន់មានទិន្នន័យ";
-    historyTableBody.appendChild(noHistoryRow);
+  // *** កែប្រែ: ប្រើ ID របស់ Container ថ្មី ដើម្បីសម្អាត Card ***
+  // (យើងប្រើ Global const ที่เราประกาศไว้ข้างบน)
+  if (historyContainer) {
+    historyContainer.innerHTML = ""; // លុប Card ចាស់ៗចេញ
+    if (noHistoryRow) {
+      noHistoryRow.textContent = "មិនទាន់មានទិន្នន័យថ្ងៃនេះ"; // Reset text
+      historyContainer.appendChild(noHistoryRow); // បង្ហាញសារ "គ្មានទិន្នន័យ"
+    }
   }
-  monthlyHistoryTableBody.innerHTML = "";
-  if (noMonthlyHistoryRow) {
-    noMonthlyHistoryRow.cells[0].textContent = "មិនទាន់មានទិន្នន័យ";
-    monthlyHistoryTableBody.appendChild(noMonthlyHistoryRow);
+
+  if (monthlyHistoryContainer) {
+    monthlyHistoryContainer.innerHTML = ""; // លុប Card ចាស់ៗចេញ
+    if (noMonthlyHistoryRow) {
+      noMonthlyHistoryRow.textContent = "មិនទាន់មានទិន្នន័យ"; // Reset text
+      monthlyHistoryContainer.appendChild(noMonthlyHistoryRow); // បង្ហាញសារ "គ្មានទិន្នន័យ"
+    }
   }
+  // --- *** ចប់ការកែប្រែ *** ---
 
   searchInput.value = "";
   employeeListContainer.classList.add("hidden");
@@ -1524,13 +1534,14 @@ function setupAttendanceListener() {
   );
 }
 
+// --- *** កែប្រែ: សរសេរ Function នេះឡើងវិញ សម្រាប់ Card *** ---
 function renderMonthlyHistory() {
   const container = document.getElementById("monthlyHistoryContainer");
   const noDataRow = document.getElementById("noMonthlyHistoryRow");
   container.innerHTML = ""; // លុប Card ចាស់ៗចេញ
 
   if (currentMonthRecords.length === 0) {
-    container.appendChild(noDataRow);
+    if (noDataRow) container.appendChild(noDataRow);
     return;
   }
 
@@ -1629,6 +1640,7 @@ function renderMonthlyHistory() {
   });
 }
 
+// --- *** កែប្រែ: សរសេរ Function នេះឡើងវិញ សម្រាប់ Card *** ---
 function renderTodayHistory() {
   const container = document.getElementById("historyContainer");
   const noDataRow = document.getElementById("noHistoryRow");
@@ -1640,7 +1652,7 @@ function renderTodayHistory() {
   );
 
   if (!todayRecord) {
-    container.appendChild(noDataRow);
+    if (noDataRow) container.appendChild(noDataRow);
     return;
   }
 
@@ -1737,6 +1749,7 @@ function renderTodayHistory() {
   card.innerHTML = contentHTML;
   container.appendChild(card);
 }
+
 
 function updateButtonState() {
   const todayString = getTodayDateString();
