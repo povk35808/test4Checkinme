@@ -426,6 +426,19 @@ function isInsideArea(lat, lon) {
   return isInside;
 }
 
+// --- *** ថ្មី: Helper សម្រាប់ពិនិត្យទិន្នន័យខ្លី/វែង (សម្រាប់ Smart Card) *** ---
+function isShortData(htmlString) {
+  if (!htmlString) return true;
+
+  // ប្រសិនបើវាជាច្បាប់ (អក្សរពណ៌ខៀវ), វា "វែង"
+  if (htmlString.includes("text-blue-600")) {
+    return false;
+  }
+
+  // អ្វីផ្សេងទៀត (ម៉ោងពណ៌បៃតង, ម៉ោងពណ៌ក្រហម, "អវត្តមាន" ពណ៌ក្រហម, "---" ពណ៌ប្រផេះ) គឺ "ខ្លី"
+  return true;
+}
+
 // --- Function សម្រាប់ទាញទិន្នន័យច្បាប់ (Leave) ទាំងអស់ក្នុងខែ ---
 async function fetchAllLeaveForMonth(employeeId) {
   if (!dbLeave) return []; // ត្រឡប់អារេទទេ ប្រសិនបើ dbLeave មិនទាន់រួចរាល់
@@ -1512,15 +1525,12 @@ function setupAttendanceListener() {
 }
 
 function renderMonthlyHistory() {
-  monthlyHistoryTableBody.innerHTML = "";
-
-  if (noHistoryRow) {
-    noMonthlyHistoryRow.cells[0].textContent = "មិនទាន់មានទិន្នន័យ";
-  }
+  const container = document.getElementById("monthlyHistoryContainer");
+  const noDataRow = document.getElementById("noMonthlyHistoryRow");
+  container.innerHTML = ""; // លុប Card ចាស់ៗចេញ
 
   if (currentMonthRecords.length === 0) {
-    if (noMonthlyHistoryRow)
-      monthlyHistoryTableBody.appendChild(noMonthlyHistoryRow);
+    container.appendChild(noDataRow);
     return;
   }
 
@@ -1530,6 +1540,7 @@ function renderMonthlyHistory() {
     const formattedDate = record.formattedDate || record.date;
     const isToday = record.date === todayString;
 
+    // --- បង្កើត String សម្រាប់បង្ហាញ (ដូចមុន) ---
     let checkInDisplay;
     if (record.checkIn) {
       if (record.checkIn.includes("AM") || record.checkIn.includes("PM")) {
@@ -1556,23 +1567,72 @@ function renderMonthlyHistory() {
         : '<span class="text-red-500 font-semibold">អវត្តមាន</span>';
     }
 
-    const row = document.createElement("tr");
-    row.className = "hover:bg-gray-50"; // CSS ថ្មីនឹង override នេះសម្រាប់ទូរស័ព្ទ
-    row.innerHTML = `
-        <td class="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-800">${formattedDate}</td>
-        <td class="px-4 py-3 whitespace-nowrap text-sm">${checkInDisplay}</td>
-        <td class="px-4 py-3 whitespace-nowrap text-sm">${checkOutDisplay}</td>
-    `;
-    monthlyHistoryTableBody.appendChild(row);
+    // --- *** ថ្មី: "Smart" Card Layout Logic *** ---
+    const isCheckInShort = isShortData(checkInDisplay);
+    const isCheckOutShort = isShortData(checkOutDisplay);
+
+    // ប្រសិនបើ ទាំង "ចូល" និង "ចេញ" ខ្លី, ប្រើ Layout "2 ជួរ"
+    const useCompactLayout = isCheckInShort && isCheckOutShort;
+
+    const card = document.createElement("div");
+    card.className = "bg-white p-4 rounded-lg shadow-sm border border-gray-100";
+
+    let contentHTML = "";
+
+    if (useCompactLayout) {
+      // Layout "2 ជួរ" (សម្រាប់ទិន្នន័យខ្លី)
+      contentHTML = `
+        <p class="text-sm font-semibold text-gray-800 mb-2">${formattedDate}</p>
+        <div class="grid grid-cols-2 gap-2">
+          <div class="text-sm">
+            <span class="text-gray-500">ចូល:</span> ${checkInDisplay}
+          </div>
+          <div class="text-sm">
+            <span class="text-gray-500">ចេញ:</span> ${checkOutDisplay}
+          </div>
+        </div>
+      `;
+    } else {
+      // Layout "3 ជួរ" (សម្រាប់ទិន្នន័យវែង)
+      contentHTML = `
+        <p class="text-sm font-semibold text-gray-800 mb-3">${formattedDate}</p>
+        <div class="flex flex-col space-y-2 text-sm">
+          <div>
+            <span class="text-gray-500 block text-xs">ចូល:</span>
+            ${checkInDisplay}
+          </div>
+          <div>
+            <span class="text-gray-500 block text-xs">ចេញ:</span>
+            ${checkOutDisplay}
+          </div>
+        </div>
+      `;
+
+      // ករណីពិសេស: បើជាច្បាប់ពេញមួយថ្ងៃ (អក្សរ "ចូល" និង "ចេញ" ដូចគ្នា)
+      if (
+        record.checkIn &&
+        record.checkOut &&
+        record.checkIn === record.checkOut &&
+        !isCheckInShort // ហើយវាជាអក្សរវែង
+      ) {
+        contentHTML = `
+          <p class="text-sm font-semibold text-gray-800 mb-2">${formattedDate}</p>
+          <div class="text-sm">
+            ${checkInDisplay} 
+          </div>
+        `;
+      }
+    }
+
+    card.innerHTML = contentHTML;
+    container.appendChild(card);
   });
 }
 
 function renderTodayHistory() {
-  historyTableBody.innerHTML = "";
-
-  if (noHistoryRow) {
-    noHistoryRow.cells[0].textContent = "មិនទាន់មានទិន្នន័យថ្ងៃនេះ";
-  }
+  const container = document.getElementById("historyContainer");
+  const noDataRow = document.getElementById("noHistoryRow");
+  container.innerHTML = ""; // លុប Card ចាស់ៗចេញ
 
   const todayString = getTodayDateString();
   const todayRecord = currentMonthRecords.find(
@@ -1580,12 +1640,13 @@ function renderTodayHistory() {
   );
 
   if (!todayRecord) {
-    if (noHistoryRow) historyTableBody.appendChild(noHistoryRow);
+    container.appendChild(noDataRow);
     return;
   }
 
   const formattedDate = todayRecord.formattedDate || todayRecord.date;
 
+  // --- បង្កើត String សម្រាប់បង្ហាញ (ដូចមុន) ---
   let checkInDisplay;
   if (todayRecord.checkIn) {
     if (
@@ -1614,14 +1675,67 @@ function renderTodayHistory() {
     checkOutDisplay = '<span class="text-gray-400">មិនទាន់ចេញ</span>';
   }
 
-  const row = document.createElement("tr");
-  row.className = "hover:bg-gray-50"; // CSS ថ្មីនឹង override នេះសម្រាប់ទូរស័ព្ទ
-  row.innerHTML = `
-      <td class="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-800">${formattedDate}</td>
-      <td class="px-4 py-3 whitespace-nowrap text-sm">${checkInDisplay}</td>
-      <td class="px-4 py-3 whitespace-nowrap text-sm">${checkOutDisplay}</td>
-  `;
-  historyTableBody.appendChild(row);
+  // --- *** ថ្មី: "Smart" Card Layout Logic *** ---
+  const isCheckInShort = isShortData(checkInDisplay);
+  const isCheckOutShort = isShortData(checkOutDisplay);
+
+  // ប្រសិនបើ ទាំង "ចូល" និង "ចេញ" ខ្លី, ប្រើ Layout "2 ជួរ"
+  const useCompactLayout = isCheckInShort && isCheckOutShort;
+
+  const card = document.createElement("div");
+  // យើងអាចធ្វើឱ្យ Card ថ្ងៃនេះ មើលទៅពិសេសបន្តិច (ឧ. ផ្ទៃពណ៌ខៀវอ่อน)
+  card.className =
+    "bg-blue-50 p-4 rounded-lg shadow border border-blue-200";
+
+  let contentHTML = "";
+
+  if (useCompactLayout) {
+    // Layout "2 ជួរ" (សម្រាប់ទិន្នន័យខ្លី)
+    contentHTML = `
+      <p class="text-sm font-semibold text-blue-800 mb-2">${formattedDate}</p>
+      <div class="grid grid-cols-2 gap-2">
+        <div class="text-sm">
+          <span class="text-blue-700">ចូល:</span> ${checkInDisplay}
+        </div>
+        <div class="text-sm">
+          <span class="text-blue-700">ចេញ:</span> ${checkOutDisplay}
+        </div>
+      </div>
+    `;
+  } else {
+    // Layout "3 ជួរ" (សម្រាប់ទិន្នន័យវែង)
+    contentHTML = `
+      <p class="text-sm font-semibold text-blue-800 mb-3">${formattedDate}</p>
+      <div class="flex flex-col space-y-2 text-sm">
+        <div>
+          <span class="text-blue-700 block text-xs">ចូល:</span>
+          ${checkInDisplay}
+        </div>
+        <div>
+          <span class="text-blue-700 block text-xs">ចេញ:</span>
+          ${checkOutDisplay}
+        </div>
+      </div>
+    `;
+
+    // ករណីពិសេស: បើជាច្បាប់ពេញមួយថ្ងៃ (អក្សរ "ចូល" និង "ចេញ" ដូចគ្នា)
+    if (
+      todayRecord.checkIn &&
+      todayRecord.checkOut &&
+      todayRecord.checkIn === todayRecord.checkOut &&
+      !isCheckInShort // ហើយវាជាអក្សរវែង
+    ) {
+      contentHTML = `
+        <p class="text-sm font-semibold text-blue-800 mb-2">${formattedDate}</p>
+        <div class="text-sm">
+          ${checkInDisplay} 
+        </div>
+      `;
+    }
+  }
+
+  card.innerHTML = contentHTML;
+  container.appendChild(card);
 }
 
 function updateButtonState() {
