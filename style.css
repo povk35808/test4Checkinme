@@ -1,0 +1,150 @@
+body {
+  font-family: "Kantumruy Pro", sans-serif;
+}
+
+/* Loading Spinner */
+.loader {
+  border: 4px solid #f3f3f3;
+  border-top: 4px solid #3498db;
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+/* Custom Modal */
+.modal {
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.modal-hidden {
+  opacity: 0;
+  transform: scale(0.95);
+  pointer-events: none;
+}
+
+.modal-visible {
+  opacity: 1;
+  transform: scale(1);
+  pointer-events: auto;
+}
+
+/* View Transitions */
+.view {
+  /* JavaScript នឹងគ្រប់គ្រង display */
+  animation: fadeIn 0.5s ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Camera Modal Video/Canvas */
+#videoElement,
+#cameraCanvas {
+  /* ធានាថាកាមេរ៉ាមុខមិនត្រឡប់ (un-mirrored) */
+  transform: scaleX(-1);
+  -webkit-transform: scaleX(-1);
+  -moz-transform: scaleX(-1);
+}
+
+/* Styles សម្រាប់ប៊ូតុងថត */
+.capture-button {
+  width: 64px;
+  height: 64px;
+  background-color: white;
+  border-radius: 50%;
+  border: 4px solid #e5e7eb;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 16px;
+  z-index: 65;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.capture-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.capture-button-inner {
+  width: 48px;
+  height: 48px;
+  background-color: #ef4444;
+  border-radius: 50%;
+  transition: all 0.2s ease;
+}
+
+.capture-button:active .capture-button-inner {
+  transform: scale(0.9);
+}
+
+/* --- (កូដ Z-index និង Blur ត្រូវបានដកចេញ ព្រោះលែងត្រូវការ) --- */
+
+/* --- *** ថ្មី: Styles សម្រាប់ Footer Navigation Bar *** --- */
+
+/* កែប្រែ៖
+  1. override h-16 (4rem) របស់ Tailwind ឱ្យទៅជា auto
+  2. ប្រើ padding ខាងលើ និង ខាងក្រោម ជំនួសវិញ
+  3. ប្រើ env(safe-area-inset-bottom) ដើម្បីរុញប៊ូតុងឱ្យផុត Home Bar
+*/
+#footerNav nav {
+  height: auto; /* Override h-16 */
+
+  /* 8px padding ធម្មតា សម្រាប់ខាងលើ */
+  padding-top: 0.5rem;
+
+  /* Fallback សម្រាប់ browser ចាស់ (1.5rem = 24px) */
+  padding-bottom: 1.5rem;
+
+  /* សម្រាប់ browser ថ្មី (iPhone/Android)
+       វានឹងយក Safe Area ពីខាងក្រោម (ឧ. 34px) 
+       បូកនឹង 0.75rem (12px) ទៀត ឱ្យវានៅឃ្លាតស្អាត
+    */
+  padding-bottom: calc(env(safe-area-inset-bottom) + 0.75rem);
+}
+
+.nav-button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex-grow: 1;
+  color: #6b7280; /* text-gray-500 */
+  background-color: transparent;
+  border: none;
+  /* padding: 0.5rem 0; */ /* << ដកចេញ ព្រោះយើងកំណត់ Padding លើ <nav> វិញ */
+  transition: color 0.2s ease;
+  cursor: pointer;
+}
+
+.nav-button:hover {
+  color: #3b82f6; /* text-blue-500 */
+}
+
+.nav-button.active-nav {
+  color: #2563eb; /* text-blue-600 */
+  font-weight: 600;
+}
+
+/* --- *** ចប់ Styles សម្រាប់ Footer Navigation Bar *** --- */
