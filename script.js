@@ -599,7 +599,7 @@ async function fetchAllLeaveForMonth(employeeId) {
               date: dateStr,
               formattedDate: formatted,
               checkIn: leaveLabel,
-              checkOut: null,
+              checkOut: leaveLabel,
             });
           } else if (durationStr === "មួយរសៀល") {
             allLeaveRecords.push({
@@ -648,7 +648,7 @@ async function fetchAllLeaveForMonth(employeeId) {
             date: dateStr,
             formattedDate: formatted,
             checkIn: leaveLabel,
-            checkOut: null,
+            checkOut: leaveLabel,
           });
         } else if (leaveType === "មួយរសៀល") {
           allLeaveRecords.push({
@@ -819,7 +819,7 @@ async function checkLeaveStatus(employeeId, checkType) {
     if (leaveType === "មួយថ្ងៃ") {
       return { blocked: true, reason: `ច្បាប់ចេញក្រៅមួយថ្ងៃ (${reason})` };
     }
-    if (leaveType === "មួយព្រឹក" && checkType === "checkIn") {
+    if (leaveType === "មួយព្រឹក") {
       return { blocked: true, reason: `ច្បាប់ចេញក្រៅមួយព្រឹក (${reason})` };
     }
     if (leaveType === "មួយរសៀល") {
@@ -913,7 +913,7 @@ async function checkFullLeaveStatus(employeeId, checkType) {
               reason: `ច្បាប់ ${durationStr} (${reason})`,
             };
           }
-          if (durationStr === "មួយព្រឹក" && checkType === "checkIn") {
+          if (durationStr === "មួយព្រឹក") {
             return { blocked: true, reason: `ច្បាប់មួយព្រឹក (${reason})` };
           }
           if (durationStr === "មួយរសៀល") {
