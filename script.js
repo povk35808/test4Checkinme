@@ -1384,36 +1384,32 @@ function renderEmployeeList(employees) {
 // ស្វែងរក Function ឈ្មោះ "selectUser"
 // ស្វែងរក Function ឈ្មោះ "selectUser"
 // ស្វែងរក Function ឈ្មោះ "selectUser"
+// ស្វែងរក Function ឈ្មោះ "selectUser"
 async function selectUser(employee) {
   console.log("User selected:", employee);
 
-  // --- *** ថ្មី: ពិនិត្យ Session Lock ជាមុនសិន *** ---
+  // --- *** ពិនិត្យ Session Lock (កូដពីមុន) *** ---
   const sessionDocRef = doc(sessionCollectionRef, employee.id);
   try {
     const docSnap = await getDoc(sessionDocRef);
     
     if (docSnap.exists()) {
-      // Document មាន -> នរណាម្នាក់កំពុង Login
       const sessionData = docSnap.data();
       const sessionTimestamp = new Date(sessionData.timestamp).getTime();
       const sessionAge = getSyncedTime().getTime() - sessionTimestamp;
 
       if (sessionAge < SESSION_TIMEOUT_MS) {
-        // Session នៅ Active (ក្រោម 24 ម៉ោង)
         console.warn("Login BLOCKED. Session is active on another device.");
         showMessage(
           "មិនអាចចូលប្រើបាន",
           `គណនីនេះ (${employee.name}) កំពុងត្រូវបានប្រើនៅលើឧបករណ៍ផ្សេង។ សូមធ្វើការ Logout ចេញពីឧបករណ៍នោះជាមុនសិន។`,
           true
         );
-        return; // បញ្ឈប់ការ Login ទាំងស្រុង
+        return; 
       } else {
-        // Session ផុតកំណត់ (Stale) លើស 24 ម៉ោង
         console.log("Stale session detected (> 24h). Overwriting...");
-        // អនុញ្ញាតឱ្យបន្តដំណើរការ (វានឹងសរសេរทับ)
       }
     }
-    // បើ document មិន exist (docSnap.exists() === false), គឺល្អ -> អនុញ្ញាតឱ្យបន្ត
   } catch (e) {
     console.error("Failed to check session doc:", e);
     showMessage("បញ្ហា Session", `មិនអាចពិនិត្យ Session Lock បានទេ៖ ${e.message}`, true);
@@ -1427,12 +1423,14 @@ async function selectUser(employee) {
   localStorage.setItem("currentDeviceId", currentDeviceId);
 
   try {
-    // (setDoc ដូចដើម - វានឹង Overwrite session ដែល stale ឬ បង្កើតថ្មី)
+    // --- *** នេះជាកន្លែងកែប្រែ *** ---
     await setDoc(sessionDocRef, { 
       deviceId: currentDeviceId,
-      timestamp: getSyncedTime().toISOString(), // ប្រើម៉ោង Sync
+      timestamp: getSyncedTime().toISOString(),
       employeeName: employee.name,
+      status: "Active", // <-- *** ថ្មី: បន្ថែម Status ***
     });
+    // --- *** ចប់ *** ---
     console.log(
       `Session lock set for ${employee.id} with deviceId ${currentDeviceId}`
     );
@@ -1446,6 +1444,7 @@ async function selectUser(employee) {
     return;
   }
 
+  // ... (កូដខាងក្រោមទាំងអស់ក្នុង selectUser ទុកដដែល)
   currentUser = employee;
   localStorage.setItem("savedEmployeeId", employee.id);
 
@@ -1481,24 +1480,20 @@ async function selectUser(employee) {
 
   changeView("homeView");
 
-  // --- ស្ថានភាព "កំពុងដំណើរការ" (ពីការកែប្រែមុន) ---
   checkInButton.disabled = true;
   checkOutButton.disabled = true;
   attendanceStatus.textContent = "កំពុងទាញប្រវត្តិវត្តមាន...";
   attendanceStatus.className =
     "text-center text-sm text-gray-500 pb-4 px-6 h-5 animate-pulse";
-  // --- *** ចប់ *** ---
 
   await startLeaveListeners();
   setupAttendanceListener();
-  startSessionListener(employee.id);
+  startSessionListener(employee.id); // <--- Function នេះឥឡូវសំខាន់ណាស់
 
   if (timeCheckInterval) clearInterval(timeCheckInterval);
   timeCheckInterval = setInterval(updateButtonState, 30000);
 
   prepareFaceMatcher(employee.photoUrl);
-  
-  // ហៅ loadAIModels ក្នុងផ្ទៃខាងក្រោយ (ពីការកែប្រែមុន)
   loadAIModels();
 
   employeeListContainer.classList.add("hidden");
@@ -1581,6 +1576,7 @@ async function logout() { // --- ថ្មី: បន្ថែម async ---
   changeView("employeeListView");
 }
 
+// ស្វែងរក Function ឈ្មោះ "startSessionListener"
 function startSessionListener(employeeId) {
   if (sessionListener) {
     sessionListener();
@@ -1598,13 +1594,25 @@ function startSessionListener(employeeId) {
       }
 
       const sessionData = docSnap.data();
-      const firestoreDeviceId = sessionData.deviceId;
 
+      // --- *** ថ្មី: ពិនិត្យមើល Status "Block" *** ---
+      if (sessionData.status === "Block") {
+        console.warn("Session is BLOCKED by admin. Logging out.");
+        forceLogout("គណនីនេះត្រូវបាន Block ពី Admin។");
+        return; // ចេញពី Function ភ្លាម
+      }
+      // --- *** ចប់ *** ---
+
+
+      // (ពិនិត្យ Device ID ដូចដើម សម្រាប់ការ Login ឧបករណ៍ផ្សេង)
+      const firestoreDeviceId = sessionData.deviceId;
       const localDeviceId = localStorage.getItem("currentDeviceId");
 
       if (localDeviceId && firestoreDeviceId !== localDeviceId) {
         console.warn("Session conflict detected. Logging out.");
-        forceLogout("គណនីនេះត្រូវបានចូលប្រើនៅឧបករណ៍ផ្សេង។");
+        // (យើងប្តូរសារ Error នេះ ព្រោះ Logic មុន បានរារាំងវាហើយ)
+        // (ប៉ុន្តែទុកវា នៅទីនេះ ក្រែង Admin ប្តូរ DeviceId ដោយដៃ)
+        forceLogout("Session របស់អ្នកត្រូវបានរំខាន។");
       }
     },
     (error) => {
