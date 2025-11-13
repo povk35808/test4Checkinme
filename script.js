@@ -1316,85 +1316,93 @@ function renderEmployeeList(employees) {
 }
 
 // ស្វែងរក Function ឈ្មោះ "selectUser"
+// ស្វែងរក Function ឈ្មោះ "selectUser"
 async function selectUser(employee) {
-  console.log("User selected:", employee);
+  console.log("User selected:", employee);
 
-  currentDeviceId = self.crypto.randomUUID();
-  localStorage.setItem("currentDeviceId", currentDeviceId);
+  currentDeviceId = self.crypto.randomUUID();
+  localStorage.setItem("currentDeviceId", currentDeviceId);
 
-  try {
-    const sessionDocRef = doc(sessionCollectionRef, employee.id);
-    await setDoc(sessionDocRef, {
-      deviceId: currentDeviceId,
-      timestamp: new Date().toISOString(),
-      employeeName: employee.name,
-    });
-    console.log(
-      `Session lock set for ${employee.id} with deviceId ${currentDeviceId}`
-    );
-  } catch (e) {
-    console.error("Failed to set session lock:", e);
-    showMessage(
-      "បញ្ហា Session",
-      `មិនអាចកំណត់ Session Lock បានទេ៖ ${e.message}`,
-      true
-    );
-    return;
-  }
+  try {
+    const sessionDocRef = doc(sessionCollectionRef, employee.id);
+    await setDoc(sessionDocRef, {
+      deviceId: currentDeviceId,
+      timestamp: new Date().toISOString(),
+      employeeName: employee.name,
+    });
+    console.log(
+      `Session lock set for ${employee.id} with deviceId ${currentDeviceId}`
+    );
+  } catch (e) {
+    console.error("Failed to set session lock:", e);
+    showMessage(
+      "បញ្ហា Session",
+      `មិនអាចកំណត់ Session Lock បានទេ៖ ${e.message}`,
+      true
+    );
+    return;
+  }
 
-  currentUser = employee;
-  localStorage.setItem("savedEmployeeId", employee.id);
+  currentUser = employee;
+  localStorage.setItem("savedEmployeeId", employee.id);
 
-  const dayOfWeek = getSyncedTime().getDay();
-  const dayToShiftKey = [
-    "shiftSun",
-    "shiftMon",
-    "shiftTue",
-    "shiftWed",
-    "shiftThu",
-    "shiftFri",
-    "shiftSat",
-  ];
-  const shiftKey = dayToShiftKey[dayOfWeek];
-  currentUserShift = currentUser[shiftKey] || "N/A";
-  console.log(`ថ្ងៃនេះ (Day ${dayOfWeek}), វេនគឺ: ${currentUserShift}`);
+  const dayOfWeek = getSyncedTime().getDay();
+  const dayToShiftKey = [
+    "shiftSun",
+    "shiftMon",
+    "shiftTue",
+    "shiftWed",
+    "shiftThu",
+    "shiftFri",
+    "shiftSat",
+  ];
+  const shiftKey = dayToShiftKey[dayOfWeek];
+  currentUserShift = currentUser[shiftKey] || "N/A";
+  console.log(`ថ្ងៃនេះ (Day ${dayOfWeek}), វេនគឺ: ${currentUserShift}`);
 
-  const firestoreUserId = currentUser.id;
-  const simpleDataPath = `attendance/${firestoreUserId}/records`;
-  console.log("Using Firestore Path:", simpleDataPath);
-  attendanceCollectionRef = collection(dbAttendance, simpleDataPath);
+  const firestoreUserId = currentUser.id;
+  const simpleDataPath = `attendance/${firestoreUserId}/records`;
+  console.log("Using Firestore Path:", simpleDataPath);
+  attendanceCollectionRef = collection(dbAttendance, simpleDataPath);
 
-  welcomeMessage.textContent = `សូមស្វាគមន៍`;
-  profileImage.src =
-    employee.photoUrl || "https://placehold.co/80x80/e2e8f0/64748b?text=No+Img";
-  profileName.textContent = employee.name;
-  profileId.textContent = `អត្តលេខ: ${employee.id}`;
-  profileGender.textContent = `ភេទ: ${employee.gender}`;
-  profileDepartment.textContent = `ផ្នែក: ${employee.department}`;
-  profileGroup.textContent = `ក្រុម: ${employee.group}`;
-  profileGrade.textContent = `ថ្នាក់: ${employee.grade}`;
-  profileShift.textContent = `វេនថ្ងៃនេះ: ${currentUserShift}`;
+  welcomeMessage.textContent = `សូមស្វាគមន៍`;
+  profileImage.src =
+    employee.photoUrl || "https://placehold.co/80x80/e2e8f0/64748b?text=No+Img";
+  profileName.textContent = employee.name;
+  profileId.textContent = `អត្តលេខ: ${employee.id}`;
+  profileGender.textContent = `ភេទ: ${employee.gender}`;
+  profileDepartment.textContent = `ផ្នែក: ${employee.department}`;
+  profileGroup.textContent = `ក្រុម: ${employee.group}`;
+  profileGrade.textContent = `ថ្នាក់: ${employee.grade}`;
+  profileShift.textContent = `វេនថ្ងៃនេះ: ${currentUserShift}`;
 
-  changeView("homeView");
+  changeView("homeView");
 
-  // --- *** កំណែកែប្រែ *** ---
+  // --- *** ថ្មី: កំណត់ស្ថានភាព "កំពុងដំណើរការ" ភ្លាមៗ *** ---
+  // នេះដោះស្រាយបញ្ហា Race Condition ដែលប៊ូតុងអាចចុចបាន
+  checkInButton.disabled = true;
+  checkOutButton.disabled = true;
+  attendanceStatus.textContent = "កំពុងទាញប្រវត្តិវត្តមាន...";
+  attendanceStatus.className =
+    "text-center text-sm text-gray-500 pb-4 px-6 h-5 animate-pulse";
+  // --- *** ចប់ *** ---
+
+  // --- *** កំណែកែប្រែ (របស់អ្នក) *** ---
   // 1. ត្រូវប្រាកដថាយើងទាញទិន្នន័យច្បាប់ដំបូង (Initial Leave) ជាមុនសិន
-  //    Function នេះនឹងហៅ mergeAndRenderHistory() លើកទីមួយ។
-  await startLeaveListeners();
+  await startLeaveListeners();
 
   // 2. បន្ទាប់មក ចាប់ផ្ដើម Listener សម្រាប់វត្តមាន។
-  //    វានឹងហៅ mergeAndRenderHistory() លើកទីពីរ ដោយមានទិន្នន័យច្បាប់រួចជាស្រេច
-  setupAttendanceListener();
-  startSessionListener(employee.id);
+  setupAttendanceListener();
+  startSessionListener(employee.id);
   // --- *** ចប់កំណែកែប្រែ *** ---
 
-  if (timeCheckInterval) clearInterval(timeCheckInterval);
-  timeCheckInterval = setInterval(updateButtonState, 30000);
+  if (timeCheckInterval) clearInterval(timeCheckInterval);
+  timeCheckInterval = setInterval(updateButtonState, 30000);
 
-  prepareFaceMatcher(employee.photoUrl);
+  prepareFaceMatcher(employee.photoUrl);
 
-  employeeListContainer.classList.add("hidden");
-  searchInput.value = "";
+  employeeListContainer.classList.add("hidden");
+  searchInput.value = "";
 }
 
 function logout() {
@@ -1578,6 +1586,7 @@ async function startLeaveListeners() { // បន្ថែម "async"
 // --- *** កែប្រែ: ត្រឡប់ទៅប្រើទិន្នន័យពី querySnapshot ផ្ទាល់ វិញ (FIX) *** ---
 // ស្វែងរក Function ឈ្មោះ "setupAttendanceListener"
 // --- *** កែប្រែ: ត្រឡប់ទៅប្រើទិន្នន័យពី querySnapshot ផ្ទាល់ វិញ (FIX) *** ---
+// --- *** កែប្រែ: ត្រឡប់ទៅប្រើទិន្នន័យពី querySnapshot ផ្ទាល់ វិញ (FIX) *** ---
 function setupAttendanceListener() {
   if (!attendanceCollectionRef) return;
 
@@ -1585,11 +1594,7 @@ function setupAttendanceListener() {
     attendanceListener(); // បញ្ឈប់ Listener ចាស់
   }
 
-  checkInButton.disabled = true;
-  checkOutButton.disabled = true;
-  attendanceStatus.textContent = "កំពុងទាញប្រវត្តិវត្តមាន...";
-  attendanceStatus.className =
-    "text-center text-sm text-gray-500 pb-4 px-6 h-5 animate-pulse";
+  // (យើងលុបការកំណត់ "Loading" ចេញពីទីនេះ ព្រោះយើងបានធ្វើវានៅក្នុង selectUser ហើយ)
 
   attendanceListener = onSnapshot(
     attendanceCollectionRef,
@@ -1598,7 +1603,6 @@ function setupAttendanceListener() {
         `Real-time update from 'attendance' detected. Docs count: ${querySnapshot.size}`
       );
       
-      // *** ថ្មី: ចាប់ផ្ដើម allRecords ត្រង់នេះ ***
       let allRecords = [];
       querySnapshot.forEach((doc) => { // ប្រើទិន្នន័យផ្ទាល់ពី snapshot
         allRecords.push(doc.data());
@@ -1607,7 +1611,6 @@ function setupAttendanceListener() {
       const { startOfMonth, endOfMonth } = getCurrentMonthRange();
 
       // 1. Update the global attendanceRecords ពីទិន្នន័យ Snapshot ផ្ទាល់
-      // *** ថ្មី: កំណត់ attendanceRecords ឱ្យស្មើនឹងលទ្ធផល filter ផ្ទាល់ ***
       attendanceRecords = allRecords.filter(
         (record) => record.date >= startOfMonth && record.date <= endOfMonth
       );
@@ -1617,6 +1620,7 @@ function setupAttendanceListener() {
       );
 
       // 2. ហៅ merge and render function
+      // Function នេះនឹងហៅ updateButtonState() ដោយខ្លួនឯង
       await mergeAndRenderHistory();
     },
     (error) => {
