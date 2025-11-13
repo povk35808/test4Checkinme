@@ -51,13 +51,15 @@ let timeCheckInterval = null;
 let timeOffset = 0;
 let isTimeSynced = false;
 
-// ...
+// --- អថេរសម្រាប់គ្រប់គ្រង Session (Device Lock) ---
+let sessionCollectionRef = null; // <-- *** សូមប្រាកដថាអ្នកបានបន្ថែមបន្ទាត់នេះ ***
 let sessionListener = null;
-let visibilityListener = null; // (មានរួចហើយ)
-let pageHideListener = null;   // <-- *** ថ្មី ***
-let pageShowListener = null;   // <-- *** ថ្មី ***
+let visibilityListener = null;
+let pageHideListener = null;
+let pageShowListener = null;
 let currentDeviceId = null;
-// ...
+
+// --- AI & Camera Global Variables ---
 let modelsLoaded = false;
 let currentUserFaceMatcher = null;
 let currentScanAction = null;
