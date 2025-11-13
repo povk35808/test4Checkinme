@@ -519,27 +519,7 @@ function isShortData(htmlString) {
   return true;
 }
 
-// --- *** ថ្មី: Function សម្រាប់ទាញយកទិន្នន័យវត្តមាន (ប្រើ getDocs) *** ---
-async function fetchAllAttendanceForMonth() {
-  if (!attendanceCollectionRef) return [];
-
-  try {
-    const querySnapshot = await getDocs(attendanceCollectionRef); // One-time fetch
-    let allRecords = [];
-    querySnapshot.forEach((doc) => {
-      allRecords.push(doc.data());
-    });
-
-    const { startOfMonth, endOfMonth } = getCurrentMonthRange();
-    return allRecords.filter(
-      (record) => record.date >= startOfMonth && record.date <= endOfMonth
-    );
-  } catch (error) {
-    console.error("Error fetching attendance:", error);
-    showMessage("បញ្ហា", "មិនអាចទាញទិន្នន័យវត្តមានបានទេ។", true);
-    return [];
-  }
-}
+// --- *** បានលុប Function fetchAllAttendanceForMonth() ចេញ *** ---
 
 async function fetchAllLeaveForMonth(employeeId) {
   if (!dbLeave) return [];
@@ -1582,12 +1562,12 @@ function startLeaveListeners() {
   );
 }
 
-// --- *** កែប្រែ: Function នេះត្រូវបានសរសេរឡើងវិញទាំងស្រុង *** ---
+// --- *** កែប្រែ: ត្រឡប់ទៅប្រើទិន្នន័យពី querySnapshot ផ្ទាល់ វិញ *** ---
 function setupAttendanceListener() {
   if (!attendanceCollectionRef) return;
 
   if (attendanceListener) {
-    attendanceListener();
+    attendanceListener(); // បញ្ឈប់ Listener ចាស់
   }
 
   checkInButton.disabled = true;
@@ -1596,21 +1576,28 @@ function setupAttendanceListener() {
   attendanceStatus.className =
     "text-center text-sm text-gray-500 pb-4 px-6 h-5 animate-pulse";
 
-  // បង្កើត Function សម្រាប់ហៅឡើងវិញ
-  const reFetchAllAttendance = async () => {
-    attendanceRecords = await fetchAllAttendanceForMonth();
-    console.log(
-      `Real-time Attendance Updated: ${attendanceRecords.length} records.`
-    );
-    await mergeAndRenderHistory();
-  };
-
-  // ប្រើ onSnapshot ជា Trigger ដើម្បីហៅ reFetchAllAttendance
   attendanceListener = onSnapshot(
     attendanceCollectionRef,
-    (querySnapshot) => {
+    async (querySnapshot) => {
       console.log("Real-time update from 'attendance' detected.");
-      reFetchAllAttendance();
+      let allRecords = [];
+      querySnapshot.forEach((doc) => {
+        allRecords.push(doc.data());
+      });
+
+      const { startOfMonth, endOfMonth } = getCurrentMonthRange();
+
+      // 1. Update the global attendanceRecords ពីទិន្នន័យ Snapshot ផ្ទាល់
+      attendanceRecords = allRecords.filter(
+        (record) => record.date >= startOfMonth && record.date <= endOfMonth
+      );
+
+      console.log(
+        `Real-time Attendance Updated: ${attendanceRecords.length} records.`
+      );
+
+      // 2. ហៅ merge and render function
+      await mergeAndRenderHistory();
     },
     (error) => {
       console.error("Error listening to attendance:", error);
@@ -1769,7 +1756,7 @@ function renderTodayHistory() {
   if (todayRecord.checkOut) {
     if (
       todayRecord.checkOut.includes("AM") ||
-      todayRecord.checkOut.includes("PM")
+      todayRecord.checkout.includes("PM")
     ) {
       checkOutDisplay = `<span class="text-red-600 font-semibold">${todayRecord.checkOut}</span>`;
     } else {
