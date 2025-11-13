@@ -1403,8 +1403,9 @@ function renderEmployeeList(employees) {
 // ស្វែងរក Function ឈ្មោះ "selectUser"
 // ស្វែងរក Function ឈ្មោះ "selectUser"
 // ស្វែងរក Function ឈ្មោះ "selectUser"
+// ស្វែងរក Function ឈ្មោះ "selectUser" ហើយជំនួសវាទាំងមូល
 async function selectUser(employee) {
-  console.log("User selected:", employee);
+  console.log("User selected:", employee); // (យើងនឹងពិនិត្យ Console នេះ)
 
   const sessionDocRef = doc(sessionCollectionRef, employee.id);
   const localDeviceId = localStorage.getItem("currentDeviceId") || self.crypto.randomUUID();
@@ -1420,11 +1421,24 @@ async function selectUser(employee) {
 
       // ករណីទី១៖ Admin បាន Block
       if (sessionStatus === "Block") {
-        // --- *** ថ្មី: បោះ Error ផ្ទាល់ខ្លួន *** ---
         console.warn("Login BLOCKED. Account is manually blocked by Admin.");
-        // (យើងមិនហៅ startSessionListener នៅទីនេះទៀតទេ)
-        throw new Error(`ACCOUNT_BLOCKED::${employee.name}`);
-        // --- *** ចប់ *** ---
+        
+        showMessage(
+          "គណនីត្រូវបានទប់ស្កាត់",
+          `គណនីនេះ (${employee.name}) ត្រូវបាន Block ដោយ Admin។ សូមទាក់ទងអ្នកគ្រប់គ្រង។`,
+          true
+        );
+        
+        // កំណត់ Callback (ដោះស្រាយបញ្ហាគាំង)
+        currentConfirmCallback = () => {
+          localStorage.removeItem("savedEmployeeId");
+          localStorage.removeItem("currentDeviceId"); 
+          currentDeviceId = null;
+          currentUser = null;
+          hideMessage();
+          changeView("employeeListView");
+        };
+        return; // បញ្ឈប់
       }
 
       // ករណីទី២៖ គណនី "Free"
@@ -1451,20 +1465,17 @@ async function selectUser(employee) {
       console.log("No session doc found. Proceeding with login.");
     }
 
-  // --- *** ថ្មី: កែប្រែ Catch Block ទាំងមូល *** ---
   } catch (e) {
-    
-    // 1. ចាប់ Error "Block" របស់យើង
+    // (Catch Block ពីការកែប្រែមុន)
     if (e.message.startsWith("ACCOUNT_BLOCKED")) {
       const name = e.message.split("::")[1] || employee.name;
       
       showMessage(
-        "គណនីត្រូវបានទប់ស្កាត់", // (កែភាសាថៃ)
+        "គណនីត្រូវបានទប់ស្កាត់",
         `គណនីនេះ (${name}) ត្រូវបាន Block ដោយ Admin។ សូមទាក់ទងអ្នកគ្រប់គ្រង។`,
         true
       );
       
-      // 2. កំណត់ Callback (ដោះស្រាយបញ្ហាគាំង)
       currentConfirmCallback = () => {
         localStorage.removeItem("savedEmployeeId");
         localStorage.removeItem("currentDeviceId"); 
@@ -1473,17 +1484,15 @@ async function selectUser(employee) {
         hideMessage();
         changeView("employeeListView");
       };
-      return; // បញ្ឈប់
+      return;
     }
-
-    // 2. ចាប់ Error ផ្សេងទៀត (ឧ. បាត់ Internet)
     console.error("Failed to check session doc from server:", e);
     showMessage("បញ្ហា Session", `មិនអាចពិនិត្យ Session Lock បានទេ៖ ${e.message}`, true);
     return;
   }
-  // --- *** ចប់ការកែប្រែ *** ---
+  // --- *** ចប់ការពិនិត្យ *** ---
 
-  // (កូដខាងក្រោមទាំងអស់ក្នុង selectUser ទុកដដែល)
+  // (បន្តដំណើរការ Login)
   currentDeviceId = localDeviceId; 
   localStorage.setItem("currentDeviceId", currentDeviceId);
 
@@ -1513,22 +1522,56 @@ async function selectUser(employee) {
 
   currentUser = employee;
   localStorage.setItem("savedEmployeeId", employee.id);
-  
-  // ... (កូដ Day of Week ទុកដដែល)
-  // ... (កូដ Firestore Path ទុកដដែល)
-  // ... (កូដ Profile UI ទុកដដែល)
+
+  const dayOfWeek = getSyncedTime().getDay();
+  const dayToShiftKey = [
+    "shiftSun",
+    "shiftMon",
+    "shiftTue",
+    "shiftWed",
+    "shiftThu",
+    "shiftFri",
+    "shiftSat",
+  ];
+  const shiftKey = dayToShiftKey[dayOfWeek];
+  currentUserShift = currentUser[shiftKey] || "N/A";
+  console.log(`ថ្ងៃនេះ (Day ${dayOfWeek}), វេនគឺ: ${currentUserShift}`);
+
+  const firestoreUserId = currentUser.id;
+  const simpleDataPath = `attendance/${firestoreUserId}/records`;
+  console.log("Using Firestore Path:", simpleDataPath);
+  attendanceCollectionRef = collection(dbAttendance, simpleDataPath);
+
+
+  // --- *** នេះគឺជាផ្នែកសំខាន់ (សូមពិនិត្យ) *** ---
+  // (កូដនេះត្រូវតែ Update UI ទាំងអស់)
+  welcomeMessage.textContent = `សូមស្វាគមន៍`;
+  profileImage.src =
+    employee.photoUrl || "https://placehold.co/80x80/e2e8f0/64748b?text=No+Img";
+  profileName.textContent = employee.name;
+  profileId.textContent = `អត្តលេខ: ${employee.id}`;
+  profileGender.textContent = `ភេទ: ${employee.gender}`;
+  profileDepartment.textContent = `ផ្នែក: ${employee.department}`;
+  profileGroup.textContent = `ក្រុម: ${employee.group}`;
+  profileGrade.textContent = `ថ្នាក់: ${employee.grade}`;
+  profileShift.textContent = `វេនថ្ងៃនេះ: ${currentUserShift}`;
+  // --- *** ចប់ *** ---
 
   changeView("homeView");
 
-  // ... (កូដ "Loading" ទុកដដែល)
-  
-  // Listeners ទាំងអស់ ឥឡូវនឹងរត់បានត្រឹមត្រូវ (បន្ទាប់ពី Login ជោគជ័យ)
+  checkInButton.disabled = true;
+  checkOutButton.disabled = true;
+  attendanceStatus.textContent = "កំពុងទាញប្រវត្តិវត្តមាន...";
+  attendanceStatus.className =
+    "text-center text-sm text-gray-500 pb-4 px-6 h-5 animate-pulse";
+
   await startLeaveListeners();
   setupAttendanceListener();
   startSessionListener(employee.id);
   startVisibilityListener(employee.id);
 
-  // ... (កូដ Time Check Interval ទុកដដែល)
+  if (timeCheckInterval) clearInterval(timeCheckInterval);
+  timeCheckInterval = setInterval(updateButtonState, 30000);
 
   prepareFaceMatcher(employee.photoUrl);
   loadAIModels();
@@ -1538,6 +1581,8 @@ async function selectUser(employee) {
 }
                                      
 
+// --- *** ថ្មី: Function សម្រាប់សម្អាត Session ក្នុង Local *** ---
+// (Function នេះ មិនមែន Async ទេ គឺវាលឿន)
 // --- *** ថ្មី: Function សម្រាប់សម្អាត Session ក្នុង Local *** ---
 // (Function នេះ មិនមែន Async ទេ គឺវាលឿន)
 function clearLocalSession() {
@@ -1579,7 +1624,7 @@ function clearLocalSession() {
     timeCheckInterval = null;
   }
 
-  // សម្អាតទិន្នន័យ User
+  // សម្អាតទិន្នន័យ User (សំខាន់បំផុត)
   currentUser = null;
   currentUserShift = null;
   currentUserFaceMatcher = null;
@@ -1612,6 +1657,9 @@ function clearLocalSession() {
   searchInput.value = "";
   employeeListContainer.classList.add("hidden");
 }
+
+
+  
 // --- *** ចប់ Function ថ្មី *** ---
 
 // ស្វែងរក Function ឈ្មោះ "logout"
