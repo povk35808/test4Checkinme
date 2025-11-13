@@ -745,14 +745,16 @@ async function mergeAndRenderHistory() {
 // ស្វែងរក Function ឈ្មោះ "loadAIModels" ហើយជំនួសវា
 // ស្វែងរក Function ឈ្មោះ "loadAIModels" ហើយជំនួសវា
 // ស្វែងរក Function ឈ្មោះ "loadAIModels" ហើយជំនួសវា
+// ស្វែងរក Function ឈ្មោះ "loadAIModels" ហើយជំនួសវា
 async function loadAIModels() {
-  const MODEL_URL = "./models";
-
-  // --- *** ថ្មី: Update Loading Text *** ---
-  loadingText.textContent = "កំពុងទាញយក AI Models...";
+  // --- *** ថ្មី: ប្រើ CDN URL ជំនួស Folder "models" *** ---
+  const MODEL_URL = "https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/models";
   // --- *** ចប់ *** ---
 
+  loadingText.textContent = "កំពុងទាញយក AI Models...";
+
   try {
+    // (useDiskCache: true នឹងរក្សាទុកវាក្នុង Browser)
     await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL, {
       useDiskCache: true,
     });
@@ -763,20 +765,19 @@ async function loadAIModels() {
       useDiskCache: true,
     });
 
-    console.log("AI Models Loaded");
+    console.log("AI Models Loaded (from CDN)");
     modelsLoaded = true;
 
   } catch (e) {
     console.error("Error loading AI models", e);
     showMessage(
       "បញ្ហា AI Model",
-      `មិនអាចផ្ទុក AI Models បានទេ (${e.message})។ សូម Refresh ទំព័រ។`,
+      `មិនអាចផ្ទុក AI Models ពី CDN បានទេ (${e.message})។ សូមពិនិត្យ Internet។`,
       true
     );
     throw e; // បោះ Error ដើម្បីបញ្ឈប់ការ Login
   }
 }
-
 
 
 async function prepareFaceMatcher(imageUrl) {
@@ -1111,6 +1112,7 @@ async function handleCaptureAndAnalyze() {
 
 // ស្វែងរក Function ឈ្មោះ "initializeAppFirebase" ហើយជំនួសវា
 // ស្វែងរក Function ឈ្មោះ "initializeAppFirebase" ហើយជំនួសវា
+// ស្វែងរក Function ឈ្មោះ "initializeAppFirebase" ហើយជំនួសវា
 async function initializeAppFirebase() {
   try {
     const attendanceApp = initializeApp(firebaseConfigAttendance);
@@ -1198,6 +1200,7 @@ function fetchCheckInLateRules() {
 // ស្វែងរក Function ឈ្មោះ "setupAuthListener"
 // ស្វែងរក Function ឈ្មោះ "setupAuthListener" ហើយជំនួសវា
 // ស្វែងរក Function ឈ្មោះ "setupAuthListener" ហើយជំនួសវា
+// ស្វែងរក Function ឈ្មោះ "setupAuthListener" ហើយជំនួសវា
 async function setupAuthListener() {
   return new Promise((resolve, reject) => { // ត្រូវតែ Return Promise
     onAuthStateChanged(authAttendance, async (user) => {
@@ -1224,8 +1227,8 @@ async function setupAuthListener() {
     });
   });
 }
-
 // ស្វែងរក Function ឈ្មោះ "fetchGoogleSheetData"
+// ស្វែងរក Function ឈ្មោះ "fetchGoogleSheetData" ហើយជំនួសវា
 // ស្វែងរក Function ឈ្មោះ "fetchGoogleSheetData" ហើយជំនួសវា
 // ស្វែងរក Function ឈ្មោះ "fetchGoogleSheetData" ហើយជំនួសវា
 async function fetchGoogleSheetData() {
@@ -1268,7 +1271,6 @@ async function fetchGoogleSheetData() {
 
     const freshEmployees = data.table.rows
       .map((row) => {
-        // ... (កូដ map របស់អ្នកទុកដដែល)
         const cells = row.c;
         const id = cells[COL_INDEX.ID]?.v;
         if (!id) {
@@ -1309,7 +1311,7 @@ async function fetchGoogleSheetData() {
     }
     
     // --- *** ថ្មី: ផ្ទុក AI Models បន្ទាប់ពីទាញ GSheet រួច *** ---
-    await loadAIModels();
+    await loadAIModels(); // ហៅ Function ថ្មី (CDN)
     // --- *** ចប់ *** ---
     
     // ឥឡូវទើបយើងអាច Login
@@ -1389,6 +1391,7 @@ function renderEmployeeList(employees) {
 // ស្វែងរក Function ឈ្មោះ "selectUser"
 // ស្វែងរក Function ឈ្មោះ "selectUser"
 // ស្វែងរក Function ឈ្មោះ "selectUser" ហើយជំនួសវាទាំងមូល
+// ស្វែងរក Function ឈ្មោះ "selectUser" ហើយជំនួសវា
 // ស្វែងរក Function ឈ្មោះ "selectUser" ហើយជំនួសវា
 async function selectUser(employee) {
   console.log("User selected:", employee); 
@@ -1488,7 +1491,7 @@ async function selectUser(employee) {
   currentUser = employee;
   localStorage.setItem("savedEmployeeId", employee.id);
   
-  // --- *** 4. គណនាវេន (Shift) *** ---
+  // (កូដ 4, 5, 6, 7 ទុកដដែល)
   const dayOfWeek = getSyncedTime().getDay();
   const dayToShiftKey = [
     "shiftSun",
@@ -1503,13 +1506,11 @@ async function selectUser(employee) {
   currentUserShift = currentUser[shiftKey] || "N/A";
   console.log(`ថ្ងៃនេះ (Day ${dayOfWeek}), វេនគឺ: ${currentUserShift}`);
 
-  // --- *** 5. កំណត់ Path សម្រាប់ Firestore *** ---
   const firestoreUserId = currentUser.id;
   const simpleDataPath = `attendance/${firestoreUserId}/records`;
   console.log("Using Firestore Path:", simpleDataPath);
   attendanceCollectionRef = collection(dbAttendance, simpleDataPath);
 
-  // --- *** 6. បំពេញ Profile UI *** ---
   welcomeMessage.textContent = `សូមស្វាគមន៍`;
   profileImage.src =
     employee.photoUrl || "https://placehold.co/80x80/e2e8f0/64748b?text=No+Img";
@@ -1521,7 +1522,6 @@ async function selectUser(employee) {
   profileGrade.textContent = `ថ្នាក់: ${employee.grade}`;
   profileShift.textContent = `វេនថ្ងៃនេះ: ${currentUserShift}`;
 
-  // --- *** 7. ប្តូរ View និងកំណត់ "Loading" *** ---
   changeView("homeView");
 
   checkInButton.disabled = true;
@@ -1537,7 +1537,7 @@ async function selectUser(employee) {
   startSessionListener(employee.id); 
   startVisibilityListener(employee.id);
 
-  // --- *** 9. ចាប់ផ្ដើម Timer *** ---
+  // (កូដ 9 ទុកដដែល)
   if (timeCheckInterval) clearInterval(timeCheckInterval);
   timeCheckInterval = setInterval(updateButtonState, 30000);
 
@@ -1546,7 +1546,7 @@ async function selectUser(employee) {
   
   // (loadAIModels() ត្រូវបានដកចេញពីទីនេះ)
 
-  // --- *** 11. សម្អាត UI ចាស់ *** ---
+  // (កូដ 11 ទុកដដែល)
   employeeListContainer.classList.add("hidden");
   searchInput.value = "";
 }
