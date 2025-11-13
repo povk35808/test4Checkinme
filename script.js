@@ -1576,6 +1576,8 @@ async function startLeaveListeners() { // បន្ថែម "async"
 }
 
 // --- *** កែប្រែ: ត្រឡប់ទៅប្រើទិន្នន័យពី querySnapshot ផ្ទាល់ វិញ (FIX) *** ---
+// ស្វែងរក Function ឈ្មោះ "setupAttendanceListener"
+// --- *** កែប្រែ: ត្រឡប់ទៅប្រើទិន្នន័យពី querySnapshot ផ្ទាល់ វិញ (FIX) *** ---
 function setupAttendanceListener() {
   if (!attendanceCollectionRef) return;
 
@@ -1592,7 +1594,11 @@ function setupAttendanceListener() {
   attendanceListener = onSnapshot(
     attendanceCollectionRef,
     async (querySnapshot) => { // ប្រើ async សម្រាប់ await mergeAndRenderHistory
-      console.log("Real-time update from 'attendance' detected.");
+      console.log(
+        `Real-time update from 'attendance' detected. Docs count: ${querySnapshot.size}`
+      );
+      
+      // *** ថ្មី: ចាប់ផ្ដើម allRecords ត្រង់នេះ ***
       let allRecords = [];
       querySnapshot.forEach((doc) => { // ប្រើទិន្នន័យផ្ទាល់ពី snapshot
         allRecords.push(doc.data());
@@ -1601,6 +1607,7 @@ function setupAttendanceListener() {
       const { startOfMonth, endOfMonth } = getCurrentMonthRange();
 
       // 1. Update the global attendanceRecords ពីទិន្នន័យ Snapshot ផ្ទាល់
+      // *** ថ្មី: កំណត់ attendanceRecords ឱ្យស្មើនឹងលទ្ធផល filter ផ្ទាល់ ***
       attendanceRecords = allRecords.filter(
         (record) => record.date >= startOfMonth && record.date <= endOfMonth
       );
