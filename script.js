@@ -17,6 +17,7 @@ import {
   where,
   getDocs,
   getDoc, // <-- *** ថ្មី: បន្ថែម getDoc ***
+  getDocFromServer, // <-- *** ថ្មី: បន្ថែម getDocFromServer ***
   deleteDoc, // <-- *** ថ្មី: បន្ថែម deleteDoc ***
 } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 import {
@@ -1387,21 +1388,28 @@ function renderEmployeeList(employees) {
 // ស្វែងរក Function ឈ្មោះ "selectUser"
 // ស្វែងរក Function ឈ្មោះ "selectUser"
 // ស្វែងរក Function ឈ្មោះ "selectUser"
+// ស្វែងរក Function ឈ្មោះ "selectUser"
 async function selectUser(employee) {
   console.log("User selected:", employee);
 
   // --- *** ថ្មី: ពិនិត្យ Session Lock (រួមទាំង Status) *** ---
   const sessionDocRef = doc(sessionCollectionRef, employee.id);
   try {
-    const docSnap = await getDoc(sessionDocRef);
+    // --- *** នេះគឺជាការកែប្រែដ៏សំខាន់បំផុត *** ---
+    // យើងប្រើ getDocFromServer ដើម្បីប្រាកដថាយើងកំពុងអានទិន្នន័យពិតពី Server
+    // មិនមែនទិន្នន័យពី Cache ដែលហួសសម័យទេ
+    console.log("Forcing server check for session...");
+    const docSnap = await getDocFromServer(sessionDocRef);
+    // --- *** ចប់ការកែប្រែ *** ---
     
     if (docSnap.exists()) {
+      console.log("Session doc exists on server.");
       const sessionData = docSnap.data();
       const sessionStatus = sessionData.status || null;
       const sessionTimestamp = new Date(sessionData.timestamp).getTime();
       const sessionAge = getSyncedTime().getTime() - sessionTimestamp;
 
-      // ករណីទី១៖ គណនីត្រូវបាន Block ដោយ Admin (សំខាន់បំផុត)
+      // ករណីទី១៖ គណនីត្រូវបាន Block ដោយ Admin
       if (sessionStatus === "Block") {
         console.warn("Login BLOCKED. Account is manually blocked by Admin.");
         showMessage(
@@ -1409,11 +1417,10 @@ async function selectUser(employee) {
           `គណនីនេះ (${employee.name}) ត្រូវបាន Block ដោយ Admin។ សូមទាក់ទងអ្នកគ្រប់គ្រង។`,
           true
         );
-        return; // បញ្ឈប់ការ Login
+        return; 
       }
 
-      // ករណីទី២៖ គណនីកំពុង "Active" ហើយមិនទាន់ Stale (ក្រោម 24h)
-      // នេះគឺជា Logic "ឧបករណ៍តែមួយ" ពីមុន
+      // ករណីទី២៖ គណនី "Active" ហើយមិនទាន់ Stale (ក្រោម 24h)
       if (sessionStatus === "Active" && sessionAge < SESSION_TIMEOUT_MS) {
         console.warn("Login BLOCKED. Session is active on another device.");
         showMessage(
@@ -1421,19 +1428,20 @@ async function selectUser(employee) {
           `គណនីនេះ (${employee.name}) កំពុងត្រូវបានប្រើនៅលើឧបករណ៍ផ្សេង។ សូមធ្វើការ Logout ចេញពីឧបករណ៍នោះជាមុនសិន។`,
           true
         );
-        return; // បញ្ឈប់ការ Login
+        return; 
       }
 
-      // ករណីទី៣៖ Session គឺ "Offline", "Active" (Stale >= 24h), 
-      // ឬ status មិនស្គាល់ (null) -> អាចសរសេរทับបាន
+      // ករណីទី៣៖ "Offline", "Active" (Stale >= 24h), ឬ null
       console.log("Stale, Offline, or invalid session detected. Overwriting...");
       
+    } else {
+      // ករណីទី៤៖ docSnap.exists() === false (មិនមាន Session) -> ល្អបំផុត
+      console.log("No session doc found on server. Proceeding with login.");
     }
-    // ករណីទី៤៖ docSnap.exists() === false (មិនមាន Session) -> ល្អបំផុត
     // (បន្តដំណើរការ)
 
   } catch (e) {
-    console.error("Failed to check session doc:", e);
+    console.error("Failed to check session doc from server:", e);
     showMessage("បញ្ហា Session", `មិនអាចពិនិត្យ Session Lock បានទេ៖ ${e.message}`, true);
     return;
   }
@@ -1445,22 +1453,18 @@ async function selectUser(employee) {
   localStorage.setItem("currentDeviceId", currentDeviceId);
 
   try {
-    // --- *** នេះជាកន្លែងកែប្រែ *** ---
-    // (បន្ថែម អត្តលេខ, ថ្នាក់, រូបថត, ក្រុម)
+    // ពេល Login ជោគជ័យ, status គឺ "Active" ជានិច្ច
     await setDoc(sessionDocRef, { 
-      // ទិន្នន័យ Session
       deviceId: currentDeviceId,
       timestamp: getSyncedTime().toISOString(),
-      status: "Active", // ពេល Login គឺ Active ជានិច្ច
+      status: "Active",
       
-      // ទិន្នន័យបន្ថែម (តាមសំណើ)
       employeeName: employee.name,
-      employeeId: employee.id,        // <-- ថ្មី: អត្តលេខ
-      employeeGrade: employee.grade,  // <-- ថ្មី: ថ្នាក់
-      employeePhoto: employee.photoUrl, // <-- ថ្មី: រូបថត
-      employeeGroup: employee.group,    // <-- ថ្មី: ក្រុម
+      employeeId: employee.id,
+      employeeGrade: employee.grade,
+      employeePhoto: employee.photoUrl,
+      employeeGroup: employee.group,
     });
-    // --- *** ចប់ *** ---
     console.log(
       `Session lock set for ${employee.id} with deviceId ${currentDeviceId}`
     );
@@ -1474,12 +1478,20 @@ async function selectUser(employee) {
     return;
   }
 
-  // ... (កូដខាងក្រោមទាំងអស់ក្នុង selectUser ទុកដដែល)
+  // (កូដខាងក្រោមទាំងអស់ក្នុង selectUser ទុកដដែល មិនផ្លាស់ប្តូរ)
   currentUser = employee;
   localStorage.setItem("savedEmployeeId", employee.id);
 
   const dayOfWeek = getSyncedTime().getDay();
-  // ... (កូដ dayToShiftKey ទុកដដែល)
+  const dayToShiftKey = [
+    "shiftSun",
+    "shiftMon",
+    "shiftTue",
+    "shiftWed",
+    "shiftThu",
+    "shiftFri",
+    "shiftSat",
+  ];
   const shiftKey = dayToShiftKey[dayOfWeek];
   currentUserShift = currentUser[shiftKey] || "N/A";
   console.log(`ថ្ងៃនេះ (Day ${dayOfWeek}), វេនគឺ: ${currentUserShift}`);
@@ -1490,7 +1502,6 @@ async function selectUser(employee) {
   attendanceCollectionRef = collection(dbAttendance, simpleDataPath);
 
   welcomeMessage.textContent = `សូមស្វាគមន៍`;
-  // ... (កូដ profile* ទុកដដែល)
   profileImage.src =
     employee.photoUrl || "https://placehold.co/80x80/e2e8f0/64748b?text=No+Img";
   profileName.textContent = employee.name;
@@ -1503,23 +1514,19 @@ async function selectUser(employee) {
 
   changeView("homeView");
 
-  // ... (កូដ "Loading" ទុកដដែល)
   checkInButton.disabled = true;
   checkOutButton.disabled = true;
   attendanceStatus.textContent = "កំពុងទាញប្រវត្តិវត្តមាន...";
   attendanceStatus.className =
-    "text-center text-sm text-gray-500 pb-4 px-6 h-5 animate-pulse";
+    "text-center text-sm text-gray-500 pb4 px-6 h-5 animate-pulse";
 
   await startLeaveListeners();
   setupAttendanceListener();
   startSessionListener(employee.id);
-  
-  // --- *** ថ្មី: ចាប់ផ្ដើម Listener សម្រាប់ Active/Offline *** ---
   startVisibilityListener(employee.id);
-  // --- *** ចប់ *** ---
 
   if (timeCheckInterval) clearInterval(timeCheckInterval);
-  // ... (កូដ interval ទុកដដែល)
+  timeCheckInterval = setInterval(updateButtonState, 30000);
 
   prepareFaceMatcher(employee.photoUrl);
   loadAIModels();
