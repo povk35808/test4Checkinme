@@ -721,26 +721,35 @@ async function mergeAndRenderHistory() {
 
 // --- AI & Camera Functions ---
 
+// ស្វែងរក Function ឈ្មោះ "loadAIModels"
 async function loadAIModels() {
   const MODEL_URL = "./models";
-  loadingText.textContent = "កំពុងទាញយក AI Models...";
+  
+  // --- *** កំណែកែប្រែ *** ---
+  // loadingText.textContent = "កំពុងទាញយក AI Models..."; // << ដកចេញ ព្រោះវារត់ក្នុង Background
+  // --- *** ចប់ *** ---
 
   try {
     await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL, {
-      useDiskCache: true, // <<--- ឃើញទេ?
+      useDiskCache: true,
     });
     await faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL, {
-      useDiskCache: true, // <<--- នៅទីនេះផងដែរ
+      useDiskCache: true,
     });
     await faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL, {
-      useDiskCache: true, // <<--- និងនៅទីនេះ
+      useDiskCache: true,
     });
 
     console.log("AI Models Loaded");
     modelsLoaded = true;
-    // ...
+
+    // --- *** នេះគឺជាការកែប្រែដ៏សំខាន់បំផុត *** ---
+    // await fetchGoogleSheetData(); // <<--- លុបបន្ទាត់នេះចេញ! (នេះជាអ្នកបង្ក Loop)
+    // --- *** ចប់ *** ---
+
   } catch (e) {
-    // ...
+    console.error("Error loading AI models", e);
+    // យើងមិនបង្ហាញ Message ទេ ព្រោះ User មិនឃើញវា
   }
 }
 
@@ -1153,6 +1162,7 @@ function fetchCheckInLateRules() {
   );
 }
 
+// ស្វែងរក Function ឈ្មោះ "setupAuthListener"
 async function setupAuthListener() {
   return new Promise((resolve, reject) => {
     onAuthStateChanged(authAttendance, async (user) => {
@@ -1163,7 +1173,12 @@ async function setupAuthListener() {
           await syncFirebaseTime();
           fetchShiftRules();
           fetchCheckInLateRules();
-          await loadAIModels();
+          
+          // --- *** កំណែកែប្រែ *** ---
+          // នេះគឺជាចំណុចចាប់ផ្ដើមត្រឹមត្រូវ
+          await fetchGoogleSheetData(); 
+          // --- *** ចប់ *** ---
+
           resolve();
         } catch (error) {
           console.error("Failed to init app due to time sync error.");
