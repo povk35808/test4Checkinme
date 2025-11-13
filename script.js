@@ -743,8 +743,13 @@ async function mergeAndRenderHistory() {
 
 // ស្វែងរក Function ឈ្មោះ "loadAIModels"
 // ស្វែងរក Function ឈ្មោះ "loadAIModels" ហើយជំនួសវា
+// ស្វែងរក Function ឈ្មោះ "loadAIModels" ហើយជំនួសវា
 async function loadAIModels() {
   const MODEL_URL = "./models";
+
+  // --- *** ថ្មី: Update Loading Text *** ---
+  loadingText.textContent = "កំពុងទាញយក AI Models...";
+  // --- *** ចប់ *** ---
 
   try {
     await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL, {
@@ -760,25 +765,19 @@ async function loadAIModels() {
     console.log("AI Models Loaded");
     modelsLoaded = true;
 
-    // --- *** ថ្មី: ហៅ Update Button ភ្លាមៗ *** ---
-    // បន្ទាប់ពី Models ផ្ទុករួច, យើងត្រូវ Update ប៊ូតុង
-    // ដើម្បីឱ្យវាអាច Enabled (បើក) វិញ
-    if (currentUser) { // (ពិនិត្យcurrentUser ឱ្យប្រាកដ)
-      await updateButtonState();
-    }
-    // --- *** ចប់ *** ---
+    // (យើងដក updateButtonState ចេញពីទីនេះ ព្រោះវាមិនទាន់ Login)
 
   } catch (e) {
     console.error("Error loading AI models", e);
-    // បង្ហាញ Error ធ្ងន់ធ្ងរ ប្រសិនបើ Models ផ្ទុកមិនបាន
     showMessage(
       "បញ្ហា AI Model",
       `មិនអាចផ្ទុក AI Models បានទេ (${e.message})។ សូម Refresh ទំព័រ។`,
       true
     );
+    // (យើងមិនបន្តទេ ប្រសិនបើ Model ផ្ទុកមិនបាន)
+    throw e; // បោះ Error ដើម្បីបញ្ឈប់ការ Login
   }
 }
-
 
 
 
@@ -1112,6 +1111,7 @@ async function handleCaptureAndAnalyze() {
 
 // --- Main Functions ---
 
+// ស្វែងរក Function ឈ្មោះ "initializeAppFirebase" ហើយជំនួសវា
 async function initializeAppFirebase() {
   try {
     const attendanceApp = initializeApp(firebaseConfigAttendance);
@@ -1124,11 +1124,16 @@ async function initializeAppFirebase() {
     const leaveApp = initializeApp(firebaseConfigLeave, "leaveApp");
     dbLeave = getFirestore(leaveApp);
 
-    console.log("Firebase Attendance App Initialized (Default)");
-    console.log("Firebase Leave App Initialized (leaveApp)");
-
+    console.log("Firebase Apps Initialized.");
     setLogLevel("debug");
-    await setupAuthListener();
+    
+    // 1. រង់ចាំ Auth និង Time Sync ឱ្យរួចរាល់សិន
+    await setupAuthListener(); 
+    
+    // 2. បន្ទាប់ពី Auth រួចរាល់, ទើបចាប់ផ្ដើមទាញទិន្នន័យ
+    console.log("Auth is ready. Starting main app logic (fetch/load)...");
+    await fetchGoogleSheetData(); // នេះនឹងទាញបញ្ជីឈ្មោះ + AI Models
+
   } catch (error) {
     console.error("Firebase Init Error:", error);
     showMessage(
@@ -1192,39 +1197,30 @@ function fetchCheckInLateRules() {
 }
 
 // ស្វែងរក Function ឈ្មោះ "setupAuthListener"
+// ស្វែងរក Function ឈ្មោះ "setupAuthListener" ហើយជំនួសវា
 async function setupAuthListener() {
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve, reject) => { // ត្រូវតែ Return Promise
     onAuthStateChanged(authAttendance, async (user) => {
       if (user) {
         console.log("Firebase Auth user signed in:", user.uid);
-        
         try {
           await syncFirebaseTime();
           fetchShiftRules();
           fetchCheckInLateRules();
           
-          // --- *** កំណែកែប្រែ *** ---
-          // នេះគឺជាចំណុចចាប់ផ្ដើមត្រឹមត្រូវ
-          await fetchGoogleSheetData(); 
-          // --- *** ចប់ *** ---
-
-          resolve();
+          // (យើងដក fetchGoogleSheetData ចេញពីទីនេះ)
+          
+          resolve(); // ប្រាប់ initializeAppFirebase ថា Auth រួចរាល់
         } catch (error) {
           console.error("Failed to init app due to time sync error.");
           reject(error);
         }
-
       } else {
         try {
           await signInAnonymously(authAttendance);
         } catch (error) {
           console.error("Firebase Sign In Error:", error);
-          showMessage(
-            "បញ្ហា Sign In",
-            `មិនអាច Sign In ទៅ Firebase បានទេ: ${error.message}`,
-            true
-          );
-          reject(error);
+          reject(error); // Reject ប្រសិនបើ Sign In បរាជ័យ
         }
       }
     });
@@ -1233,16 +1229,13 @@ async function setupAuthListener() {
 
 
 // ស្វែងរក Function ឈ្មោះ "fetchGoogleSheetData"
+// ស្វែងរក Function ឈ្មោះ "fetchGoogleSheetData" ហើយជំនួសវា
 async function fetchGoogleSheetData() {
   changeView("loadingView");
   loadingText.textContent = "កំពុងទាញបញ្ជីបុគ្គលិក...";
 
-  // --- *** ថ្មី: ប្រើប្រាស់ប្រព័ន្ធ Cache *** ---
   const CACHE_KEY = "employee_list_cache";
-  
-  // *** កំណែកែប្រែ តាមការស្នើសុំ ***
-  const CACHE_DURATION_MS = 5 * 60 * 1000; // 5 នាទី 
-  // --- *** ចប់កំណែកែប្រែ *** ---
+  const CACHE_DURATION_MS = 5 * 60 * 1000; // 5 នាទី
 
   try {
     const cachedData = await localforage.getItem(CACHE_KEY);
@@ -1260,36 +1253,21 @@ async function fetchGoogleSheetData() {
     }
 
     if (isCacheValid) {
-      // ប្រើទិន្នន័យពី Cache ភ្លាមៗ
       renderEmployeeList(allEmployees);
-      checkSavedLogin(); // ហៅ Function បំបែក (ខាងក្រោម)
+      // (យើងមិនទាន់ហៅ checkSavedLogin ទេ, រង់ចាំ Models សិន)
     }
 
-    // បន្តទាញយកទិន្នន័យថ្មីពី GSheet (ទោះបីមាន Cache ក៏ដោយ)
-    // ប្រសិនបើ Cache មិនvalid (isCacheValid === false), វានឹងបង្ហាញ Loading...
-    // ប្រសិនបើ Cache valid (isCacheValid === true), វានឹងទាញយកក្នុងផ្ទៃខាងក្រោយ
-    
+    // (កូដទាញ GSheet ទុកដដែល)
     const response = await fetch(GVIZ_URL);
-    if (!response.ok) {
-      throw new Error(`Network response was not ok (${response.status})`);
-    }
+    if (!response.ok) throw new Error(`Network response was not ok (${response.status})`);
+    
     let text = await response.text();
-
-    const jsonText = text.match(
-      /google\.visualization\.Query\.setResponse\((.*)\);/s
-    );
-    if (!jsonText || !jsonText[1]) {
-      throw new Error("Invalid Gviz response format.");
-    }
-
+    const jsonText = text.match(/google\.visualization\.Query\.setResponse\((.*)\);/s);
+    if (!jsonText || !jsonText[1]) throw new Error("Invalid Gviz response format.");
+    
     const data = JSON.parse(jsonText[1]);
-
     if (data.status === "error") {
-      throw new Error(
-        `Google Sheet Error: ${data.errors
-          .map((e) => e.detailed_message)
-          .join(", ")}`
-      );
+      throw new Error(`Google Sheet Error: ${data.errors.map((e) => e.detailed_message).join(", ")}`);
     }
 
     const freshEmployees = data.table.rows
@@ -1324,26 +1302,29 @@ async function fetchGoogleSheetData() {
 
     console.log(`Loaded ${freshEmployees.length} employees from GSheet.`);
     
-    // រក្សាទុកទិន្នន័យថ្មីទៅ Cache
     await localforage.setItem(CACHE_KEY, {
       data: freshEmployees,
       timestamp: Date.now(),
     });
 
-    // ប្រសិនបើ Cache មិន valid (isCacheValid === false)
-    // យើងត្រូវ Update UI ជាមួយទិន្នន័យថ្មី
     if (!isCacheValid) {
       allEmployees = freshEmployees;
       renderEmployeeList(allEmployees);
-      checkSavedLogin(); // ហៅ Function បំបែក
     }
+    
+    // --- *** ថ្មី: ផ្ទុក AI Models បន្ទាប់ពីទាញ GSheet រួច *** ---
+    // (យើងត្រូវតែ await វានៅទីនេះ)
+    await loadAIModels();
+    // --- *** ចប់ *** ---
+    
+    // ឥឡូវទើបយើងអាច Login
+    checkSavedLogin();
 
   } catch (error) {
-    // ... (កូដ catch error របស់អ្នកទុកដដែល)
     console.error("Fetch Google Sheet Error:", error);
     showMessage(
       "បញ្ហាទាញទិន្នន័យ",
-      `មិនអាចទាញទិន្នន័យពី Google Sheet បានទេ។ សូមប្រាកដថា Sheet ត្រូវបាន Publish to the web។ Error: ${error.message}`,
+      `មិនអាចទាញទិន្នន័យពី Google Sheet បានទេ។ Error: ${error.message}`,
       true
     );
   }
@@ -1414,14 +1395,15 @@ function renderEmployeeList(employees) {
 // ស្វែងរក Function ឈ្មោះ "selectUser"
 // ស្វែងរក Function ឈ្មោះ "selectUser" ហើយជំនួសវាទាំងមូល
 async function selectUser(employee) {
-  console.log("User selected:", employee); // (យើងនឹងពិនិត្យ Console នេះ)
+  console.log("User selected:", employee); 
 
   const sessionDocRef = doc(sessionCollectionRef, employee.id);
   const localDeviceId = localStorage.getItem("currentDeviceId") || self.crypto.randomUUID();
 
+  // --- *** 1. ពិនិត្យ Session Lock (Block, Free, Active/Offline) *** ---
   try {
     console.log("Forcing server check for session...");
-    const docSnap = await getDocFromServer(sessionDocRef);
+    const docSnap = await getDocFromServer(sessionDocRef); // ប្រើ getDocFromServer
 
     if (docSnap.exists()) {
       const sessionData = docSnap.data();
@@ -1431,51 +1413,41 @@ async function selectUser(employee) {
       // ករណីទី១៖ Admin បាន Block
       if (sessionStatus === "Block") {
         console.warn("Login BLOCKED. Account is manually blocked by Admin.");
-        
-        showMessage(
-          "គណនីត្រូវបានទប់ស្កាត់",
-          `គណនីនេះ (${employee.name}) ត្រូវបាន Block ដោយ Admin។ សូមទាក់ទងអ្នកគ្រប់គ្រង។`,
-          true
-        );
-        
-        // កំណត់ Callback (ដោះស្រាយបញ្ហាគាំង)
-        currentConfirmCallback = () => {
-          localStorage.removeItem("savedEmployeeId");
-          localStorage.removeItem("currentDeviceId"); 
-          currentDeviceId = null;
-          currentUser = null;
-          hideMessage();
-          changeView("employeeListView");
-        };
-        return; // បញ្ឈប់
+        // បោះ Error ផ្ទាល់ខ្លួន ដើម្បីឱ្យ Catch Block ចាប់
+        throw new Error(`ACCOUNT_BLOCKED::${employee.name}`);
       }
 
       // ករណីទី២៖ គណនី "Free"
       if (sessionStatus === "Free") {
         console.log("Session is 'Free'. Proceeding with login.");
       
-      // ករណីទី៣៖ "Active" ឬ "Offline"
+      // ករណីទី៣៖ "Active" ឬ "Offline" (ចាក់សោ)
       } else if (sessionStatus === "Active" || sessionStatus === "Offline") {
         
+        // ពិនិត្យមើលថាតើជាឧបករណ៍ដដែលឬអត់
         if (sessionDeviceId === localDeviceId) {
           console.log("Device ID matches. Reconnecting...");
         } else {
+          // បើ Device ID មិនដូច -> រារាំងឧបករណ៍ផ្សេង
           console.warn("Login BLOCKED. Session is active on another device.");
           showMessage(
             "មិនអាចចូលប្រើបាន",
             `គណនីនេះ (${employee.name}) កំពុងចាក់សោលើឧបករណ៍ផ្សេង។ សូម Logout ពីឧបករណ៍នោះ ឬស្នើ Admin ឱ្យកំណត់ 'Free'។`,
             true
           );
-          return; 
+          return; // រារាំង
         }
       }
       
     } else {
+      // ករណីទី៤៖ មិនមាន Document (Login លើកដំបូង)
       console.log("No session doc found. Proceeding with login.");
     }
 
   } catch (e) {
-    // (Catch Block ពីការកែប្រែមុន)
+    
+    // --- *** 2. Catch Block សម្រាប់ដោះស្រាយ Error *** ---
+    // ចាប់ Error "Block" របស់យើង
     if (e.message.startsWith("ACCOUNT_BLOCKED")) {
       const name = e.message.split("::")[1] || employee.name;
       
@@ -1485,6 +1457,7 @@ async function selectUser(employee) {
         true
       );
       
+      // កំណត់ Callback (ដោះស្រាយបញ្ហាគាំង)
       currentConfirmCallback = () => {
         localStorage.removeItem("savedEmployeeId");
         localStorage.removeItem("currentDeviceId"); 
@@ -1495,17 +1468,20 @@ async function selectUser(employee) {
       };
       return;
     }
+
+    // ចាប់ Error ផ្សេងទៀត (ឧ. បាត់ Internet)
     console.error("Failed to check session doc from server:", e);
     showMessage("បញ្ហា Session", `មិនអាចពិនិត្យ Session Lock បានទេ៖ ${e.message}`, true);
     return;
   }
   // --- *** ចប់ការពិនិត្យ *** ---
 
-  // (បន្តដំណើរការ Login)
+  // --- *** 3. បន្តដំណើរការ Login (បើผ่าน) *** ---
   currentDeviceId = localDeviceId; 
   localStorage.setItem("currentDeviceId", currentDeviceId);
 
   try {
+    // សរសេរ Session ថ្មី (រួមទាំងព័ត៌មានបន្ថែម)
     await setDoc(sessionDocRef, { 
       deviceId: currentDeviceId,
       timestamp: getSyncedTime().toISOString(),
@@ -1531,7 +1507,8 @@ async function selectUser(employee) {
 
   currentUser = employee;
   localStorage.setItem("savedEmployeeId", employee.id);
-
+  
+  // --- *** 4. គណនាវេន (Shift) *** ---
   const dayOfWeek = getSyncedTime().getDay();
   const dayToShiftKey = [
     "shiftSun",
@@ -1546,14 +1523,13 @@ async function selectUser(employee) {
   currentUserShift = currentUser[shiftKey] || "N/A";
   console.log(`ថ្ងៃនេះ (Day ${dayOfWeek}), វេនគឺ: ${currentUserShift}`);
 
+  // --- *** 5. កំណត់ Path សម្រាប់ Firestore *** ---
   const firestoreUserId = currentUser.id;
   const simpleDataPath = `attendance/${firestoreUserId}/records`;
   console.log("Using Firestore Path:", simpleDataPath);
   attendanceCollectionRef = collection(dbAttendance, simpleDataPath);
 
-
-  // --- *** នេះគឺជាផ្នែកសំខាន់ (សូមពិនិត្យ) *** ---
-  // (កូដនេះត្រូវតែ Update UI ទាំងអស់)
+  // --- *** 6. បំពេញ Profile UI (ដោះស្រាយបញ្ហា "គ្មានទិន្នន័យ") *** ---
   welcomeMessage.textContent = `សូមស្វាគមន៍`;
   profileImage.src =
     employee.photoUrl || "https://placehold.co/80x80/e2e8f0/64748b?text=No+Img";
@@ -1564,8 +1540,8 @@ async function selectUser(employee) {
   profileGroup.textContent = `ក្រុម: ${employee.group}`;
   profileGrade.textContent = `ថ្នាក់: ${employee.grade}`;
   profileShift.textContent = `វេនថ្ងៃនេះ: ${currentUserShift}`;
-  // --- *** ចប់ *** ---
 
+  // --- *** 7. ប្តូរ View និងកំណត់ "Loading" *** ---
   changeView("homeView");
 
   checkInButton.disabled = true;
@@ -1574,17 +1550,21 @@ async function selectUser(employee) {
   attendanceStatus.className =
     "text-center text-sm text-gray-500 pb-4 px-6 h-5 animate-pulse";
 
+  // --- *** 8. ចាប់ផ្ដើម Listeners ទាំងអស់ (ឥឡូវនេះវានឹង Defined) *** ---
   await startLeaveListeners();
   setupAttendanceListener();
   startSessionListener(employee.id);
   startVisibilityListener(employee.id);
 
+  // --- *** 9. ចាប់ផ្ដើម Timer *** ---
   if (timeCheckInterval) clearInterval(timeCheckInterval);
   timeCheckInterval = setInterval(updateButtonState, 30000);
 
+  // --- *** 10. ត្រៀម AI *** ---
   prepareFaceMatcher(employee.photoUrl);
-  loadAIModels();
+  // (loadAIModels ត្រូវបានដកចេញ ព្រោះវាបានរត់រួចហើយ)
 
+  // --- *** 11. សម្អាត UI ចាស់ *** ---
   employeeListContainer.classList.add("hidden");
   searchInput.value = "";
 }
