@@ -1386,6 +1386,7 @@ function renderEmployeeList(employees) {
 // ស្វែងរក Function ឈ្មោះ "selectUser"
 // ស្វែងរក Function ឈ្មោះ "selectUser"
 // ស្វែងរក Function ឈ្មោះ "selectUser"
+// ស្វែងរក Function ឈ្មោះ "selectUser"
 async function selectUser(employee) {
   console.log("User selected:", employee);
 
@@ -1423,9 +1424,9 @@ async function selectUser(employee) {
         return; // បញ្ឈប់ការ Login
       }
 
-      // ករណីទី៣៖ Session គឺ "Active" តែ Stale (>= 24h) 
+      // ករណីទី៣៖ Session គឺ "Offline", "Active" (Stale >= 24h), 
       // ឬ status មិនស្គាល់ (null) -> អាចសរសេរทับបាន
-      console.log("Stale or invalid session detected. Overwriting...");
+      console.log("Stale, Offline, or invalid session detected. Overwriting...");
       
     }
     // ករណីទី៤៖ docSnap.exists() === false (មិនមាន Session) -> ល្អបំផុត
@@ -1444,13 +1445,22 @@ async function selectUser(employee) {
   localStorage.setItem("currentDeviceId", currentDeviceId);
 
   try {
-    // ពេល Login ជោគជ័យ, status គឺ "Active" ជានិច្ច
+    // --- *** នេះជាកន្លែងកែប្រែ *** ---
+    // (បន្ថែម អត្តលេខ, ថ្នាក់, រូបថត, ក្រុម)
     await setDoc(sessionDocRef, { 
+      // ទិន្នន័យ Session
       deviceId: currentDeviceId,
       timestamp: getSyncedTime().toISOString(),
+      status: "Active", // ពេល Login គឺ Active ជានិច្ច
+      
+      // ទិន្នន័យបន្ថែម (តាមសំណើ)
       employeeName: employee.name,
-      status: "Active",
+      employeeId: employee.id,        // <-- ថ្មី: អត្តលេខ
+      employeeGrade: employee.grade,  // <-- ថ្មី: ថ្នាក់
+      employeePhoto: employee.photoUrl, // <-- ថ្មី: រូបថត
+      employeeGroup: employee.group,    // <-- ថ្មី: ក្រុម
     });
+    // --- *** ចប់ *** ---
     console.log(
       `Session lock set for ${employee.id} with deviceId ${currentDeviceId}`
     );
@@ -1464,20 +1474,12 @@ async function selectUser(employee) {
     return;
   }
 
-  // ... (កូដខាងក្រោមទាំងអស់ក្នុង selectUser ទុកដដែល មិនផ្លាស់ប្តូរ)
+  // ... (កូដខាងក្រោមទាំងអស់ក្នុង selectUser ទុកដដែល)
   currentUser = employee;
   localStorage.setItem("savedEmployeeId", employee.id);
 
   const dayOfWeek = getSyncedTime().getDay();
-  const dayToShiftKey = [
-    "shiftSun",
-    "shiftMon",
-    "shiftTue",
-    "shiftWed",
-    "shiftThu",
-    "shiftFri",
-    "shiftSat",
-  ];
+  // ... (កូដ dayToShiftKey ទុកដដែល)
   const shiftKey = dayToShiftKey[dayOfWeek];
   currentUserShift = currentUser[shiftKey] || "N/A";
   console.log(`ថ្ងៃនេះ (Day ${dayOfWeek}), វេនគឺ: ${currentUserShift}`);
@@ -1488,6 +1490,7 @@ async function selectUser(employee) {
   attendanceCollectionRef = collection(dbAttendance, simpleDataPath);
 
   welcomeMessage.textContent = `សូមស្វាគមន៍`;
+  // ... (កូដ profile* ទុកដដែល)
   profileImage.src =
     employee.photoUrl || "https://placehold.co/80x80/e2e8f0/64748b?text=No+Img";
   profileName.textContent = employee.name;
@@ -1500,6 +1503,7 @@ async function selectUser(employee) {
 
   changeView("homeView");
 
+  // ... (កូដ "Loading" ទុកដដែល)
   checkInButton.disabled = true;
   checkOutButton.disabled = true;
   attendanceStatus.textContent = "កំពុងទាញប្រវត្តិវត្តមាន...";
@@ -1509,9 +1513,13 @@ async function selectUser(employee) {
   await startLeaveListeners();
   setupAttendanceListener();
   startSessionListener(employee.id);
+  
+  // --- *** ថ្មី: ចាប់ផ្ដើម Listener សម្រាប់ Active/Offline *** ---
+  startVisibilityListener(employee.id);
+  // --- *** ចប់ *** ---
 
   if (timeCheckInterval) clearInterval(timeCheckInterval);
-  timeCheckInterval = setInterval(updateButtonState, 30000);
+  // ... (កូដ interval ទុកដដែល)
 
   prepareFaceMatcher(employee.photoUrl);
   loadAIModels();
@@ -1521,9 +1529,18 @@ async function selectUser(employee) {
 }
 
   
+
+  
 // ស្វែងរក Function ឈ្មោះ "logout"
 async function logout() { // --- ថ្មី: បន្ថែម async ---
 
+// --- *** ថ្មី: បញ្ឈប់ Visibility Listener *** ---
+  if (visibilityListener) {
+    document.removeEventListener("visibilitychange", visibilityListener);
+    visibilityListener = null;
+  }
+  // --- *** ចប់ *** ---
+  
   // --- *** ថ្មី: លុប Session Lock ពី Firestore *** ---
   if (currentUser && sessionCollectionRef) {
     try {
