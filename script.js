@@ -16,6 +16,8 @@ import {
   query,
   where,
   getDocs,
+  getDoc, // <-- *** ថ្មី: បន្ថែម getDoc ***
+  deleteDoc, // <-- *** ថ្មី: បន្ថែម deleteDoc ***
 } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 import {
   getDatabase,
@@ -27,6 +29,9 @@ import {
 let dbAttendance, dbLeave, authAttendance;
 let dbAttendanceRTDB;
 let allEmployees = [];
+// --- *** ថ្មី: កំណត់អាយុ Session สูงสุด *** ---
+const SESSION_TIMEOUT_MS = 24 * 60 * 60 * 1000; // 24 ម៉ោង
+// --- *** ចប់ *** ---
 let currentMonthRecords = [];
 let attendanceRecords = [];
 let leaveRecords = [];
@@ -1378,17 +1383,54 @@ function renderEmployeeList(employees) {
 // ស្វែងរក Function ឈ្មោះ "selectUser"
 // ស្វែងរក Function ឈ្មោះ "selectUser"
 // ស្វែងរក Function ឈ្មោះ "selectUser"
+// ស្វែងរក Function ឈ្មោះ "selectUser"
 async function selectUser(employee) {
   console.log("User selected:", employee);
 
+  // --- *** ថ្មី: ពិនិត្យ Session Lock ជាមុនសិន *** ---
+  const sessionDocRef = doc(sessionCollectionRef, employee.id);
+  try {
+    const docSnap = await getDoc(sessionDocRef);
+    
+    if (docSnap.exists()) {
+      // Document មាន -> នរណាម្នាក់កំពុង Login
+      const sessionData = docSnap.data();
+      const sessionTimestamp = new Date(sessionData.timestamp).getTime();
+      const sessionAge = getSyncedTime().getTime() - sessionTimestamp;
+
+      if (sessionAge < SESSION_TIMEOUT_MS) {
+        // Session នៅ Active (ក្រោម 24 ម៉ោង)
+        console.warn("Login BLOCKED. Session is active on another device.");
+        showMessage(
+          "មិនអាចចូលប្រើបាន",
+          `គណនីនេះ (${employee.name}) កំពុងត្រូវបានប្រើនៅលើឧបករណ៍ផ្សេង។ សូមធ្វើការ Logout ចេញពីឧបករណ៍នោះជាមុនសិន។`,
+          true
+        );
+        return; // បញ្ឈប់ការ Login ទាំងស្រុង
+      } else {
+        // Session ផុតកំណត់ (Stale) លើស 24 ម៉ោង
+        console.log("Stale session detected (> 24h). Overwriting...");
+        // អនុញ្ញាតឱ្យបន្តដំណើរការ (វានឹងសរសេរทับ)
+      }
+    }
+    // បើ document មិន exist (docSnap.exists() === false), គឺល្អ -> អនុញ្ញាតឱ្យបន្ត
+  } catch (e) {
+    console.error("Failed to check session doc:", e);
+    showMessage("បញ្ហា Session", `មិនអាចពិនិត្យ Session Lock បានទេ៖ ${e.message}`, true);
+    return;
+  }
+  // --- *** ចប់ការពិនិត្យ *** ---
+
+
+  // បើមកដល់ចំណុចនេះ = អនុញ្ញាតឱ្យ Login
   currentDeviceId = self.crypto.randomUUID();
   localStorage.setItem("currentDeviceId", currentDeviceId);
 
   try {
-    const sessionDocRef = doc(sessionCollectionRef, employee.id);
-    await setDoc(sessionDocRef, {
+    // (setDoc ដូចដើម - វានឹង Overwrite session ដែល stale ឬ បង្កើតថ្មី)
+    await setDoc(sessionDocRef, { 
       deviceId: currentDeviceId,
-      timestamp: new Date().toISOString(),
+      timestamp: getSyncedTime().toISOString(), // ប្រើម៉ោង Sync
       employeeName: employee.name,
     });
     console.log(
@@ -1439,8 +1481,7 @@ async function selectUser(employee) {
 
   changeView("homeView");
 
-  // --- *** ថ្មី: កំណត់ស្ថានភាព "កំពុងដំណើរការ" ភ្លាមៗ *** ---
-  // នេះដោះស្រាយបញ្ហា Race Condition ដែលប៊ូតុងអាចចុចបាន
+  // --- ស្ថានភាព "កំពុងដំណើរការ" (ពីការកែប្រែមុន) ---
   checkInButton.disabled = true;
   checkOutButton.disabled = true;
   attendanceStatus.textContent = "កំពុងទាញប្រវត្តិវត្តមាន...";
@@ -1448,10 +1489,7 @@ async function selectUser(employee) {
     "text-center text-sm text-gray-500 pb-4 px-6 h-5 animate-pulse";
   // --- *** ចប់ *** ---
 
-  // 1. ត្រូវប្រាកដថាយើងទាញទិន្នន័យច្បាប់ដំបូង (Initial Leave) ជាមុនសិន
   await startLeaveListeners();
-
-  // 2. បន្ទាប់មក ចាប់ផ្ដើម Listener សម្រាប់វត្តមាន។
   setupAttendanceListener();
   startSessionListener(employee.id);
 
@@ -1459,11 +1497,31 @@ async function selectUser(employee) {
   timeCheckInterval = setInterval(updateButtonState, 30000);
 
   prepareFaceMatcher(employee.photoUrl);
+  
+  // ហៅ loadAIModels ក្នុងផ្ទៃខាងក្រោយ (ពីការកែប្រែមុន)
+  loadAIModels();
 
   employeeListContainer.classList.add("hidden");
   searchInput.value = "";
 }
-function logout() {
+                                     
+  
+// ស្វែងរក Function ឈ្មោះ "logout"
+async function logout() { // --- ថ្មី: បន្ថែម async ---
+
+  // --- *** ថ្មី: លុប Session Lock ពី Firestore *** ---
+  if (currentUser && sessionCollectionRef) {
+    try {
+      const sessionDocRef = doc(sessionCollectionRef, currentUser.id);
+      await deleteDoc(sessionDocRef);
+      console.log(`Session lock deleted for ${currentUser.id}`);
+    } catch (e) {
+      console.error("Failed to delete session lock:", e);
+      // (បន្ត Logout ធម្មតា ទោះបី fail ក៏ដោយ)
+    }
+  }
+  // --- *** ចប់ *** ---
+
   currentUser = null;
   currentUserShift = null;
   currentUserFaceMatcher = null;
