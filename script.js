@@ -33,6 +33,7 @@ let leaveRecords = [];
 let currentUser = null;
 let currentUserShift = null;
 let allShiftRules = null;
+let allCheckInLateRules = null; // *** ថ្មី: សម្រាប់ច្បាប់ Check-in យឺត ***
 let attendanceCollectionRef = null;
 let attendanceListener = null;
 let leaveCollectionListener = null;
@@ -40,10 +41,9 @@ let outCollectionListener = null;
 let currentConfirmCallback = null;
 let timeCheckInterval = null;
 
-// --- *** កែប្រែ: អថេរសម្រាប់គ្រប់គ្រងម៉ោង Server Time *** ---
-let timeOffset = 0; // គម្លាតរវាងម៉ោង Server និង ម៉ោង Local
-let isTimeSynced = false; // តើ Time Sync រួចរាល់ហើយឬនៅ?
-// --- *********************************************** ---
+// --- អថេរសម្រាប់គ្រប់គ្រងម៉ោង Server Time ---
+let timeOffset = 0;
+let isTimeSynced = false;
 
 // --- អថេរសម្រាប់គ្រប់គ្រង Session (Device Lock) ---
 let sessionCollectionRef = null;
@@ -186,14 +186,11 @@ const employeeListContent = document.getElementById("employeeListContent");
 
 function getSyncedTime() {
   if (!isTimeSynced) {
-    // បើយังមិន Sync ប្រើម៉ោង Local បណ្ដោះអាសន្ន
-    // (Listener នឹង Update វានៅពេលក្រោយ)
     return new Date();
   }
   return new Date(Date.now() + timeOffset);
 }
 
-// --- *** ថ្មី: Function សម្រាប់ Sync ម៉ោង Firebase (ជំនួស syncTime) *** ---
 function syncFirebaseTime() {
   return new Promise((resolve, reject) => {
     loadingText.textContent = "កំពុងធ្វើសមកាលកម្មម៉ោង...";
@@ -204,7 +201,7 @@ function syncFirebaseTime() {
         timeOffset = snapshot.val();
         isTimeSynced = true;
         console.log(`Time synced. Offset is: ${timeOffset}ms`);
-        resolve(); // ដោះស្រាយ Promise ពេលទទួលបាន Offset
+        resolve();
       },
       (error) => {
         console.error("Failed to sync Firebase time:", error);
@@ -214,7 +211,7 @@ function syncFirebaseTime() {
           `មិនអាចធ្វើសមកាលកម្មម៉ោង Firebase បានទេ។ Error: ${error.message}`,
           true
         );
-        reject(error); // ច្រានចោល Promise ពេលមាន Error
+        reject(error);
       }
     );
   });
@@ -1139,7 +1136,32 @@ function fetchShiftRules() {
   );
 }
 
-// --- *** កែប្រែ: ហៅ syncFirebaseTime() ជំនួស syncTime() *** ---
+// --- *** ថ្មី: បង្កើត Function សម្រាប់ទាញយកច្បាប់ Check-in យឺត *** ---
+function fetchCheckInLateRules() {
+  if (!dbAttendanceRTDB) return;
+
+  const rulesRef = ref(dbAttendanceRTDB, "CheckInLate"); // ផ្អែកតាមរូបភាព
+
+  onValue(
+    rulesRef,
+    (snapshot) => {
+      if (snapshot.exists()) {
+        allCheckInLateRules = snapshot.val();
+        console.log("Firebase CheckInLate Rules Loaded:", allCheckInLateRules);
+      } else {
+        console.error("មិនអាចរកឃើញ 'CheckInLate' នៅក្នុង Realtime Database!");
+        // នេះមិនមែនជា Error ធ្ងន់ធ្ងរទេ គ្រាន់តែ Log ទុក
+        console.warn("CheckInLate rules not found. Late check will not function.");
+      }
+    },
+    (error) => {
+      console.error("Firebase RTDB Error (CheckInLate):", error);
+      // មិនមែនជា Error ធ្ងន់ធ្ងរ
+    }
+  );
+}
+
+// --- *** កែប្រែ: ហៅ syncFirebaseTime() និង fetchCheckInLateRules() *** ---
 async function setupAuthListener() {
   return new Promise((resolve, reject) => {
     onAuthStateChanged(authAttendance, async (user) => {
@@ -1147,12 +1169,12 @@ async function setupAuthListener() {
         console.log("Firebase Auth user signed in:", user.uid);
         
         try {
-          await syncFirebaseTime(); // *** ថ្មី: ត្រូវតែ Sync ម៉ោងមុនគេ ***
+          await syncFirebaseTime();
           fetchShiftRules();
+          fetchCheckInLateRules(); // *** ថ្មី: ទាញច្បាប់ Check-in យឺត ***
           await loadAIModels();
           resolve();
         } catch (error) {
-          // syncFirebaseTime() នឹងបង្ហាញ Error Message រួចហើយ
           console.error("Failed to init app due to time sync error.");
           reject(error);
         }
@@ -1606,7 +1628,12 @@ function renderMonthlyHistory() {
     let checkInDisplay;
     if (record.checkIn) {
       if (record.checkIn.includes("AM") || record.checkIn.includes("PM")) {
-        checkInDisplay = `<span class="text-green-600 font-semibold">${record.checkIn}</span>`;
+        // *** កែប្រែ: បន្ថែម Logic ពិនិត្យ (មកយឺត) ***
+        if (record.checkIn.includes("(មកយឺត)")) {
+          checkInDisplay = `<span class="text-red-500 font-semibold">${record.checkIn}</span>`;
+        } else {
+          checkInDisplay = `<span class="text-green-600 font-semibold">${record.checkIn}</span>`;
+        }
       } else {
         checkInDisplay = `<span class="text-blue-600 font-semibold">${record.checkIn}</span>`;
       }
@@ -1711,7 +1738,12 @@ function renderTodayHistory() {
       todayRecord.checkIn.includes("AM") ||
       todayRecord.checkIn.includes("PM")
     ) {
-      checkInDisplay = `<span class="text-green-600 font-semibold">${todayRecord.checkIn}</span>`;
+      // *** កែប្រែ: បន្ថែម Logic ពិនិត្យ (មកយឺត) ***
+      if (todayRecord.checkIn.includes("(មកយឺត)")) {
+          checkInDisplay = `<span class="text-red-500 font-semibold">${todayRecord.checkIn}</span>`;
+        } else {
+          checkInDisplay = `<span class="text-green-600 font-semibold">${todayRecord.checkIn}</span>`;
+        }
     } else {
       checkInDisplay = `<span class="text-blue-600 font-semibold">${todayRecord.checkIn}</span>`;
     }
@@ -1796,8 +1828,6 @@ async function updateButtonState() {
     (record) => record.date === todayString
   );
 
-  // --- 1. ពិនិត្យលក្ខខ័ណ្ឌទាំងអស់ (Leave and Shift) ---
-  
   const outOfOfficeInStatus = await checkLeaveStatus(currentUser.id, "checkIn");
   const fullLeaveInStatus = await checkFullLeaveStatus(currentUser.id, "checkIn");
   const leaveBlockIn = outOfOfficeInStatus || fullLeaveInStatus;
@@ -1809,19 +1839,22 @@ async function updateButtonState() {
   const canCheckIn = checkShiftTime(currentUserShift, "checkIn");
   const canCheckOut = checkShiftTime(currentUserShift, "checkOut");
 
-  // --- 2. កំណត់ស្ថានភាពប៊ូតុង Check-in ---
   let checkInDisabled = false;
   let statusMessage = "សូមធ្វើការ Check-in";
   let statusClass = "text-blue-700";
 
   if (todayData && todayData.checkIn) {
     checkInDisabled = true;
-    if (isShortData(`<span class="${statusClass}">${todayData.checkIn}</span>`)) {
+    // *** កែប្រែ: ពិនិត្យ (មកយឺត) សម្រាប់ពណ៌ ***
+    if (todayData.checkIn.includes("(មកយឺត)")) {
       statusMessage = `បាន Check-in ម៉ោង: ${todayData.checkIn}`;
-      statusClass = "text-green-700";
+      statusClass = "text-red-700"; // ពណ៌ក្រហមបើមកយឺត
+    } else if (isShortData(`<span class="${statusClass}">${todayData.checkIn}</span>`)) {
+      statusMessage = `បាន Check-in ម៉ោង: ${todayData.checkIn}`;
+      statusClass = "text-green-700"; // ពណ៌បៃតងបើទាន់ពេល
     } else {
       statusMessage = `ថ្ងៃនេះអ្នកមាន៖ ${todayData.checkIn}`;
-      statusClass = "text-blue-700";
+      statusClass = "text-blue-700"; // ពណ៌ខៀវបើជាច្បាប់
     }
   } else if (leaveBlockIn) {
     checkInDisabled = true;
@@ -1835,7 +1868,6 @@ async function updateButtonState() {
 
   checkInButton.disabled = checkInDisabled;
 
-  // --- 3. កំណត់ស្ថានភាពប៊ូតុង Check-out ---
   let checkOutDisabled = true;
 
   if (todayData && todayData.checkIn && !todayData.checkOut) {
@@ -1851,9 +1883,13 @@ async function updateButtonState() {
       statusClass = "text-yellow-600";
     }
     
+    // *** កែប្រែ: ពិនិត្យ (មកយឺត) សម្រាប់ពណ៌ (ពេលកំពុងរង់ចាំ Check-out) ***
     if (isShortData(`<span class="${statusClass}">${todayData.checkIn}</span>`)) {
         if (checkOutDisabled) {
           // Keep the 'leave' or 'outside shift' message
+        } else if (todayData.checkIn.includes("(មកយឺត)")) {
+            statusMessage = `បាន Check-in ម៉ោង: ${todayData.checkIn}`;
+            statusClass = "text-red-700"; // រក្សាពណ៌ក្រហមបើមកយឺត
         } else {
           statusMessage = `បាន Check-in ម៉ោង: ${todayData.checkIn}`;
           statusClass = "text-green-700";
@@ -1873,12 +1909,12 @@ async function updateButtonState() {
   
   checkOutButton.disabled = checkOutDisabled;
 
-  // --- 4. អនុវត្តការផ្លាស់ប្តូរទៅ UI ---
   attendanceStatus.textContent = statusMessage;
   attendanceStatus.className = `text-center text-sm pb-4 px-6 h-5 ${statusClass}`;
 }
 
 
+// --- *** កែប្រែ: បន្ថែម Logic ពិនិត្យ "មកយឺត" *** ---
 async function handleCheckIn() {
   if (!attendanceCollectionRef || !currentUser) return;
 
@@ -1920,6 +1956,25 @@ async function handleCheckIn() {
   const now = getSyncedTime();
   const todayDocId = getTodayDateString(now);
 
+  // --- *** ថ្មី: ពិនិត្យមើលការ Check-in យឺត *** ---
+  let checkInString = formatTime(now); // ម៉ោង Format ធម្មតា
+  
+  if (allCheckInLateRules && allCheckInLateRules[currentUserShift]) {
+    const lateRuleString = allCheckInLateRules[currentUserShift].Uptime;
+    
+    if (lateRuleString) {
+      const lateThresholdTime = convertTimeFormat(lateRuleString);
+      const currentTime = now.getHours() + now.getMinutes() / 60;
+      
+      // ប្រសិនបើម៉ោងបច្ចុប្បន្ន ធំជាងឬស្មើ ម៉ោងកំណត់យឺត
+      if (lateThresholdTime !== null && currentTime >= lateThresholdTime) {
+        checkInString += " (មកយឺត)";
+        console.log("Check-in LATE detected!");
+      }
+    }
+  }
+  // --- *** ចប់ការកែប្រែ *** ---
+
   const data = {
     employeeId: currentUser.id,
     employeeName: currentUser.name,
@@ -1932,7 +1987,7 @@ async function handleCheckIn() {
     checkInTimestamp: now.toISOString(),
     checkOutTimestamp: null,
     formattedDate: formatDate(now),
-    checkIn: formatTime(now),
+    checkIn: checkInString, // *** កែប្រែ: ប្រើ String ថ្មី ***
     checkOut: null,
     checkInLocation: { lat: userCoords.latitude, lon: userCoords.longitude },
   };
@@ -2062,7 +2117,7 @@ logoutButton.addEventListener("click", () => {
 exitAppButton.addEventListener("click", () => {
   showConfirmation(
     "បិទកម្មវិធី",
-    "តើអ្នកប្រាកដជាចង់បិទកម្មវិធីមែនទេ?",
+    "តើអ្នកប្រាកdជាចង់បិទកម្មវិធីមែនទេ?",
     "បិទកម្មវិធី",
     () => {
       window.close();
