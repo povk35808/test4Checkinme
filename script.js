@@ -1423,7 +1423,7 @@ async function selectUser(employee) {
       if (sessionStatus === "Block") {
         console.warn("Login BLOCKED. Account is manually blocked by Admin.");
         showMessage(
-          "គណនីถูก Block",
+          "គណនី Block",
           `គណនីនេះ (${employee.name}) ត្រូវបាន Block ដោយ Admin។ សូមទាក់ទងអ្នកគ្រប់គ្រង។`,
           true
         );
