@@ -519,8 +519,6 @@ function isShortData(htmlString) {
   return true;
 }
 
-// --- *** បានលុប Function fetchAllAttendanceForMonth() ចេញ *** ---
-
 async function fetchAllLeaveForMonth(employeeId) {
   if (!dbLeave) return [];
 
@@ -1562,7 +1560,7 @@ function startLeaveListeners() {
   );
 }
 
-// --- *** កែប្រែ: ត្រឡប់ទៅប្រើទិន្នន័យពី querySnapshot ផ្ទាល់ វិញ *** ---
+// --- *** កែប្រែ: ត្រឡប់ទៅប្រើទិន្នន័យពី querySnapshot ផ្ទាល់ វិញ (FIX) *** ---
 function setupAttendanceListener() {
   if (!attendanceCollectionRef) return;
 
@@ -1578,10 +1576,10 @@ function setupAttendanceListener() {
 
   attendanceListener = onSnapshot(
     attendanceCollectionRef,
-    async (querySnapshot) => {
+    async (querySnapshot) => { // ប្រើ async សម្រាប់ await mergeAndRenderHistory
       console.log("Real-time update from 'attendance' detected.");
       let allRecords = [];
-      querySnapshot.forEach((doc) => {
+      querySnapshot.forEach((doc) => { // ប្រើទិន្នន័យផ្ទាល់ពី snapshot
         allRecords.push(doc.data());
       });
 
@@ -1756,7 +1754,7 @@ function renderTodayHistory() {
   if (todayRecord.checkOut) {
     if (
       todayRecord.checkOut.includes("AM") ||
-      todayRecord.checkout.includes("PM")
+      todayRecord.checkOut.includes("PM")
     ) {
       checkOutDisplay = `<span class="text-red-600 font-semibold">${todayRecord.checkOut}</span>`;
     } else {
