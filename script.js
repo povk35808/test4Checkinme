@@ -17,7 +17,6 @@ import {
   where,
   getDocs,
 } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-// *** ថ្មី: នាំចូល Realtime Database (RTDB) ***
 import {
   getDatabase,
   ref,
@@ -26,21 +25,27 @@ import {
 
 // --- Global Variables ---
 let dbAttendance, dbLeave, authAttendance;
-let dbAttendanceRTDB; // *** ថ្មី: អថេរសម្រាប់ RTDB ***
+let dbAttendanceRTDB;
 let allEmployees = [];
 let currentMonthRecords = [];
 let attendanceRecords = [];
 let leaveRecords = [];
 let currentUser = null;
 let currentUserShift = null;
-let allShiftRules = null; // *** ថ្មី: សម្រាប់រក្សាទុកច្បាប់វេនពី Firebase ***
+let allShiftRules = null;
 let attendanceCollectionRef = null;
 let attendanceListener = null;
 let leaveCollectionListener = null;
 let outCollectionListener = null;
 let currentConfirmCallback = null;
+let timeCheckInterval = null;
 
-// --- ថ្មី: អថេរសម្រាប់គ្រប់គ្រង Session (Device Lock) ---
+// --- *** ថ្មី: អថេរសម្រាប់គ្រប់គ្រងម៉ោង Server Time *** ---
+let timeOffset = 0; // គម្លាតរវាងម៉ោង Server និង ម៉ោង Local
+let isTimeSynced = false; // តើ Time Sync រួចរាល់ហើយឬនៅ?
+// --- *********************************************** ---
+
+// --- អថេរសម្រាប់គ្រប់គ្រង Session (Device Lock) ---
 let sessionCollectionRef = null;
 let sessionListener = null;
 let currentDeviceId = null;
@@ -93,7 +98,6 @@ const COL_INDEX = {
 const firebaseConfigAttendance = {
   apiKey: "AIzaSyCgc3fq9mDHMCjTRRHD3BPBL31JkKZgXFc",
   authDomain: "checkme-10e18.firebaseapp.com",
-  // *** ថ្មី: បន្ថែម Database URL សម្រាប់ RTDB ***
   databaseURL: "https://checkme-10e18-default-rtdb.firebaseio.com",
   projectId: "checkme-10e18",
   storageBucket: "checkme-10e18.firebasestorage.app",
@@ -180,6 +184,47 @@ const employeeListContent = document.getElementById("employeeListContent");
 
 // --- Helper Functions ---
 
+// --- *** ថ្មី: Function សម្រាប់ទាញយកម៉ោងពិត *** ---
+function getSyncedTime() {
+  if (!isTimeSynced) {
+    // ប្រសិនបើ Time Sync បរាជ័យ, ប្រើម៉ោង Local (មិនសូវសុវត្ថិភាព)
+    // ក្នុងករណីពិតប្រាកដ យើងគួរតែប្លុកកម្មវិធី
+    return new Date();
+  }
+  return new Date(Date.now() + timeOffset);
+}
+
+// --- *** ថ្មី: Function សម្រាប់ Sync ម៉ោង Server ពេលបើកកម្មវិធី *** ---
+async function syncTime() {
+  try {
+    loadingText.textContent = "កំពុងធ្វើសមកាលកម្មម៉ោង...";
+    // ហៅទៅ WorldTimeAPI សម្រាប់តំបន់ម៉ោងនៅភ្នំពេញ
+    const response = await fetch(
+      "https://worldtimeapi.org/api/timezone/Asia/Phnom_Penh",
+      { cache: "no-store" } // ធានាថាយើងទទួលបានម៉ោងថ្មីរាល់ពេល
+    );
+    if (!response.ok) throw new Error("Network response was not ok");
+    const data = await response.json();
+
+    // គណនាគម្លាត (Offset)
+    const serverTime = new Date(data.utc_datetime).getTime();
+    const localTime = Date.now();
+    timeOffset = serverTime - localTime;
+    isTimeSynced = true;
+    console.log(`Time synced. Offset is: ${timeOffset}ms`);
+  } catch (error) {
+    console.error("Failed to sync time:", error);
+    isTimeSynced = false;
+    // បង្ហាញ Error ធ្ងន់ធ្ងរ ព្រោះកម្មវិធីមិនអាចដំណើរការដោយគ្មានម៉ោងត្រឹមត្រូវ
+    showMessage(
+      "បញ្ហាម៉ោង",
+      `មិនអាចធ្វើសមកាលកម្មម៉ោង Server បានទេ។ សូមប្រាកដថាអ្នកមានអ៊ីនធឺណិត រួចបិទបើកកម្មវិធីឡើងវិញ។ Error: ${error.message}`,
+      true
+    );
+    throw error; // បញ្ឈប់ការផ្ទុកកម្មវិធី
+  }
+}
+
 function changeView(viewId) {
   loadingView.style.display = "none";
   employeeListView.style.display = "none";
@@ -240,15 +285,17 @@ function hideMessage() {
   currentConfirmCallback = null;
 }
 
-function getTodayDateString(date = new Date()) {
+// *** កែប្រែ: ប្រើ getSyncedTime() ជា Default ***
+function getTodayDateString(date = getSyncedTime()) {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
 }
 
+// *** កែប្រែ: ប្រើ getSyncedTime() ***
 function getCurrentMonthRange() {
-  const now = new Date();
+  const now = getSyncedTime();
   const year = now.getFullYear();
   const monthString = String(now.getMonth() + 1).padStart(2, "0");
   const lastDay = new Date(year, now.getMonth() + 1, 0).getDate();
@@ -321,7 +368,6 @@ function parseLeaveDate(dateString) {
   }
 }
 
-// --- *** ថ្មី: Function សម្រាប់បំប្លែងម៉ោង (7:00 AM) ទៅជាលេខ (7.0) *** ---
 function convertTimeFormat(timeString) {
   if (!timeString) return null;
 
@@ -337,7 +383,7 @@ function convertTimeFormat(timeString) {
       hours += 12;
     }
     if (ampm.toUpperCase() === "AM" && hours === 12) {
-      hours = 0; // 12 AM is 00:00
+      hours = 0;
     }
     return hours + minutes / 60;
   } catch (e) {
@@ -346,43 +392,37 @@ function convertTimeFormat(timeString) {
   }
 }
 
-// --- *** ថ្មី: Function នេះត្រូវបានសរសេរឡើងវិញទាំងស្រុង *** ---
+// *** កែប្រែ: ប្រើ getSyncedTime() ***
 function checkShiftTime(shiftType, checkType) {
-  // 1. ពិនិត្យថាច្បាប់ (Rules) ត្រូវបានទាញយកហើយឬនៅ
   if (!allShiftRules) {
     console.warn("Shift rules not loaded from Firebase yet.");
-    return false; // បិទការស្កេន ប្រសិនបើច្បាប់មិនទាន់ផ្ទុក
+    return false;
   }
 
-  // 2. ពិនិត្យវេន N/A ឬ Uptime (ដូចមុន)
   if (!shiftType || shiftType === "N/A") {
     console.warn(`វេនមិនបានកំណត់ (N/A)។ មិនអនុញ្ញាតឱ្យស្កេន។`);
     return false;
   }
   if (shiftType === "Uptime") {
-    return true; // Uptime អាចស្កេនបានគ្រប់ពេល
+    return true;
   }
 
-  // 3. ស្វែងរកច្បាប់សម្រាប់វេននេះ
   const rules = allShiftRules[shiftType];
   if (!rules) {
     console.warn(`វេនមិនស្គាល់: "${shiftType}" (រកមិនឃើញក្នុង Firebase)។`);
     return false;
   }
 
-  // 4. យកម៉ោងបច្ចុប្បន្នជាលេខទសភាគ
-  const now = new Date();
+  const now = getSyncedTime(); // *** កែប្រែ ***
   const currentHour = now.getHours();
   const currentMinute = now.getMinutes();
   const currentTime = currentHour + currentMinute / 60;
 
-  // 5. យកម៉ោង Start/End ពី Firebase ផ្អែកលើ checkType
   let startTimeString, endTimeString;
   if (checkType === "checkIn") {
     startTimeString = rules.StartCheckIn;
-    endTimeString = rules.EndCheckin; // ផ្អែកតាមរូបភាព (EndCheckin)
+    endTimeString = rules.EndCheckin;
   } else {
-    // 'checkOut'
     startTimeString = rules.StartCheckOut;
     endTimeString = rules.EndCheckOut;
   }
@@ -394,7 +434,6 @@ function checkShiftTime(shiftType, checkType) {
     return false;
   }
 
-  // 6. បំប្លែងម៉ោង (String) ទៅជាលេខទសភាគ
   const min = convertTimeFormat(startTimeString);
   const max = convertTimeFormat(endTimeString);
 
@@ -405,12 +444,10 @@ function checkShiftTime(shiftType, checkType) {
     return false;
   }
 
-  // 7. ធ្វើការប្រៀបធៀប
   if (currentTime >= min && currentTime <= max) {
-    return true; // នៅក្នុងម៉ោង
+    return true;
   }
 
-  // ក្រៅម៉ោង
   console.log(
     `ក្រៅម៉ោង: ម៉ោងបច្ចុប្បន្ន (${currentTime.toFixed(
       2
@@ -762,13 +799,14 @@ async function prepareFaceMatcher(imageUrl) {
   }
 }
 
+// *** កែប្រែ: ប្រើ getSyncedTime() ***
 async function checkLeaveStatus(employeeId, checkType) {
   if (!dbLeave) {
     console.warn("Leave Database (dbLeave) is not initialized.");
     return null;
   }
 
-  const todayString = formatDate(new Date());
+  const todayString = formatDate(getSyncedTime()); // *** កែប្រែ ***
   const leaveCollectionPath =
     "/artifacts/default-app-id/public/data/out_requests";
 
@@ -811,6 +849,7 @@ async function checkLeaveStatus(employeeId, checkType) {
   }
 }
 
+// *** កែប្រែ: ប្រើ getSyncedTime() ***
 async function checkFullLeaveStatus(employeeId, checkType) {
   if (!dbLeave) {
     console.warn("Leave Database (dbLeave) is not initialized.");
@@ -820,11 +859,11 @@ async function checkFullLeaveStatus(employeeId, checkType) {
   const leaveCollectionPath =
     "/artifacts/default-app-id/public/data/leave_requests";
 
-  const today = new Date();
+  const today = getSyncedTime(); // *** កែប្រែ ***
   today.setHours(0, 0, 0, 0);
   const todayTimestamp = today.getTime();
 
-  const todayString_DD_Mon_YYYY = formatDate(today);
+  const todayString_DD_Mon_YYYY = formatDate(today); // *** កែប្រែ ***
 
   const q = query(
     collection(dbLeave, leaveCollectionPath),
@@ -1052,13 +1091,12 @@ async function handleCaptureAndAnalyze() {
 
 // --- Main Functions ---
 
-// --- *** កែប្រែ: បន្ថែម dbAttendanceRTDB *** ---
 async function initializeAppFirebase() {
   try {
     const attendanceApp = initializeApp(firebaseConfigAttendance);
     dbAttendance = getFirestore(attendanceApp);
     authAttendance = getAuth(attendanceApp);
-    dbAttendanceRTDB = getDatabase(attendanceApp); // *** ថ្មី ***
+    dbAttendanceRTDB = getDatabase(attendanceApp);
 
     sessionCollectionRef = collection(dbAttendance, "active_sessions");
 
@@ -1080,11 +1118,10 @@ async function initializeAppFirebase() {
   }
 }
 
-// --- *** ថ្មី: បង្កើត Function សម្រាប់ទាញយកច្បាប់វេន *** ---
 function fetchShiftRules() {
   if (!dbAttendanceRTDB) return;
 
-  const rulesRef = ref(dbAttendanceRTDB, "វេនធ្វើការ"); // ផ្អែកតាមរូបភាព
+  const rulesRef = ref(dbAttendanceRTDB, "វេនធ្វើការ");
 
   onValue(
     rulesRef,
@@ -1092,7 +1129,6 @@ function fetchShiftRules() {
       if (snapshot.exists()) {
         allShiftRules = snapshot.val();
         console.log("Firebase Shift Rules Loaded:", allShiftRules);
-        // បន្ទាប់ពីទាញច្បាប់វេនរួច យើងត្រូវ Update ស្ថានភាពប៊ូតុង
         if (currentUser) {
           mergeAndRenderHistory();
         }
@@ -1112,15 +1148,24 @@ function fetchShiftRules() {
   );
 }
 
-// --- *** កែប្រែ: បន្ថែមការហៅ fetchShiftRules() *** ---
+// *** កែប្រែ: ហៅ await syncTime() មុនគេ ***
 async function setupAuthListener() {
   return new Promise((resolve, reject) => {
     onAuthStateChanged(authAttendance, async (user) => {
       if (user) {
         console.log("Firebase Auth user signed in:", user.uid);
-        fetchShiftRules(); // *** ថ្មី: ទាញច្បាប់វេន ***
-        await loadAIModels();
-        resolve();
+        
+        try {
+          await syncTime(); // *** ថ្មី: ត្រូវតែ Sync ម៉ោងមុនគេ ***
+          fetchShiftRules();
+          await loadAIModels();
+          resolve();
+        } catch (error) {
+          // syncTime() នឹងបង្ហាញ Error Message រួចហើយ
+          console.error("Failed to init app due to time sync error.");
+          reject(error);
+        }
+
       } else {
         try {
           await signInAnonymously(authAttendance);
@@ -1137,6 +1182,7 @@ async function setupAuthListener() {
     });
   });
 }
+
 
 async function fetchGoogleSheetData() {
   changeView("loadingView");
@@ -1270,7 +1316,7 @@ async function selectUser(employee) {
     const sessionDocRef = doc(sessionCollectionRef, employee.id);
     await setDoc(sessionDocRef, {
       deviceId: currentDeviceId,
-      timestamp: new Date().toISOString(),
+      timestamp: new Date().toISOString(), // ម៉ោង Sign in នេះ អាចប្រើម៉ោង Local បាន
       employeeName: employee.name,
     });
     console.log(
@@ -1289,7 +1335,7 @@ async function selectUser(employee) {
   currentUser = employee;
   localStorage.setItem("savedEmployeeId", employee.id);
 
-  const dayOfWeek = new Date().getDay();
+  const dayOfWeek = getSyncedTime().getDay(); // *** កែប្រែ: ប្រើ getSyncedTime() ***
   const dayToShiftKey = [
     "shiftSun",
     "shiftMon",
@@ -1325,6 +1371,9 @@ async function selectUser(employee) {
   startLeaveListeners();
   startSessionListener(employee.id);
 
+  if (timeCheckInterval) clearInterval(timeCheckInterval);
+  timeCheckInterval = setInterval(updateButtonState, 30000);
+
   prepareFaceMatcher(employee.photoUrl);
 
   employeeListContainer.classList.add("hidden");
@@ -1357,6 +1406,11 @@ function logout() {
   if (outCollectionListener) {
     outCollectionListener();
     outCollectionListener = null;
+  }
+
+  if (timeCheckInterval) {
+    clearInterval(timeCheckInterval);
+    timeCheckInterval = null;
   }
 
   attendanceCollectionRef = null;
@@ -1745,7 +1799,6 @@ function renderTodayHistory() {
   container.appendChild(card);
 }
 
-// --- *** ថ្មី: Function នេះត្រូវបានសរសេរឡើងវិញទាំងស្រុង *** ---
 async function updateButtonState() {
   const todayString = getTodayDateString();
   const todayData = currentMonthRecords.find(
@@ -1754,7 +1807,6 @@ async function updateButtonState() {
 
   // --- 1. ពិនិត្យលក្ខខ័ណ្ឌទាំងអស់ (Leave and Shift) ---
   
-  // ពិនិត្យច្បាប់ (Request 1: Check Leave first)
   const outOfOfficeInStatus = await checkLeaveStatus(currentUser.id, "checkIn");
   const fullLeaveInStatus = await checkFullLeaveStatus(currentUser.id, "checkIn");
   const leaveBlockIn = outOfOfficeInStatus || fullLeaveInStatus;
@@ -1763,7 +1815,6 @@ async function updateButtonState() {
   const fullLeaveOutStatus = await checkFullLeaveStatus(currentUser.id, "checkOut");
   const leaveBlockOut = outOfOfficeOutStatus || fullLeaveOutStatus;
 
-  // ពិនិត្យម៉ោងវេន (Request 2: Check Shift Time)
   const canCheckIn = checkShiftTime(currentUserShift, "checkIn");
   const canCheckOut = checkShiftTime(currentUserShift, "checkOut");
 
@@ -1774,7 +1825,7 @@ async function updateButtonState() {
 
   if (todayData && todayData.checkIn) {
     checkInDisabled = true;
-    if (isShortData(`<span class="${statusClass}">${todayData.checkIn}</span>`)) { // ប្រើ isShortData
+    if (isShortData(`<span class="${statusClass}">${todayData.checkIn}</span>`)) {
       statusMessage = `បាន Check-in ម៉ោង: ${todayData.checkIn}`;
       statusClass = "text-green-700";
     } else {
@@ -1786,7 +1837,7 @@ async function updateButtonState() {
     statusMessage = `អ្នកបានសុំច្បាប់៖ ${leaveBlockIn.reason}`;
     statusClass = "text-red-700";
   } else if (!canCheckIn) {
-    checkInDisabled = true; // (Request 2: Disable button)
+    checkInDisabled = true;
     statusMessage = `ក្រៅម៉ោង Check-in (${currentUserShift})`;
     statusClass = "text-yellow-600";
   }
@@ -1794,10 +1845,9 @@ async function updateButtonState() {
   checkInButton.disabled = checkInDisabled;
 
   // --- 3. កំណត់ស្ថានភាពប៊ូតុង Check-out ---
-  let checkOutDisabled = true; // Disable by default
+  let checkOutDisabled = true;
 
   if (todayData && todayData.checkIn && !todayData.checkOut) {
-    // Can only check out if checked in AND not yet checked out
     checkOutDisabled = false;
 
     if (leaveBlockOut) {
@@ -1805,13 +1855,12 @@ async function updateButtonState() {
       statusMessage = `អ្នកបានសុំច្បាប់៖ ${leaveBlockOut.reason}`;
       statusClass = "text-red-700";
     } else if (!canCheckOut) {
-      checkOutDisabled = true; // (Request 2: Disable button)
+      checkOutDisabled = true;
       statusMessage = `ក្រៅម៉ោង Check-out (${currentUserShift})`;
       statusClass = "text-yellow-600";
     }
     
-    // If check-in was short (a time), override status message
-    if (isShortData(`<span class="${statusClass}">${todayData.checkIn}</span>`)) { // ប្រើ isShortData
+    if (isShortData(`<span class="${statusClass}">${todayData.checkIn}</span>`)) {
         if (checkOutDisabled) {
           // Keep the 'leave' or 'outside shift' message
         } else {
@@ -1821,9 +1870,8 @@ async function updateButtonState() {
     }
 
   } else if (todayData && todayData.checkOut) {
-    // Already checked out
     checkOutDisabled = true;
-    if (isShortData(`<span class="${statusClass}">${todayData.checkOut}</span>`)) { // ប្រើ isShortData
+    if (isShortData(`<span class="${statusClass}">${todayData.checkOut}</span>`)) {
       statusMessage = `បាន Check-out ម៉ោង: ${todayData.checkOut}`;
       statusClass = "text-red-700";
     } else {
@@ -1840,10 +1888,9 @@ async function updateButtonState() {
 }
 
 
+// *** កែប្រែ: ប្រើ getSyncedTime() ***
 async function handleCheckIn() {
   if (!attendanceCollectionRef || !currentUser) return;
-
-  // Shift check is done by updateButtonState()
 
   checkInButton.disabled = true;
   checkOutButton.disabled = true;
@@ -1880,8 +1927,8 @@ async function handleCheckIn() {
 
   attendanceStatus.textContent = "កំពុងដំណើរការ Check-in...";
 
-  const now = new Date();
-  const todayDocId = getTodayDateString(now);
+  const now = getSyncedTime(); // *** កែប្រែ ***
+  const todayDocId = getTodayDateString(now); // *** កែប្រែ ***
 
   const data = {
     employeeId: currentUser.id,
@@ -1892,10 +1939,10 @@ async function handleCheckIn() {
     gender: currentUser.gender,
     shift: currentUserShift,
     date: todayDocId,
-    checkInTimestamp: now.toISOString(),
+    checkInTimestamp: now.toISOString(), // ប្រើម៉ោងដែលបាន Sync
     checkOutTimestamp: null,
-    formattedDate: formatDate(now),
-    checkIn: formatTime(now),
+    formattedDate: formatDate(now), // ប្រើម៉ោងដែលបាន Sync
+    checkIn: formatTime(now), // ប្រើម៉ោងដែលបាន Sync
     checkOut: null,
     checkInLocation: { lat: userCoords.latitude, lon: userCoords.longitude },
   };
@@ -1912,10 +1959,9 @@ async function handleCheckIn() {
   }
 }
 
+// *** កែប្រែ: ប្រើ getSyncedTime() ***
 async function handleCheckOut() {
   if (!attendanceCollectionRef) return;
-
-  // Shift check is done by updateButtonState()
 
   checkInButton.disabled = true;
   checkOutButton.disabled = true;
@@ -1952,12 +1998,12 @@ async function handleCheckOut() {
 
   attendanceStatus.textContent = "កំពុងដំណើរការ Check-out...";
 
-  const now = new Date();
-  const todayDocId = getTodayDateString(now);
+  const now = getSyncedTime(); // *** កែប្រែ ***
+  const todayDocId = getTodayDateString(now); // *** កែប្រែ ***
 
   const data = {
-    checkOutTimestamp: now.toISOString(),
-    checkOut: formatTime(now),
+    checkOutTimestamp: now.toISOString(), // ប្រើម៉ោងដែលបាន Sync
+    checkOut: formatTime(now), // ប្រើម៉ោងដែលបាន Sync
     checkOutLocation: { lat: userCoords.latitude, lon: userCoords.longitude },
   };
 
