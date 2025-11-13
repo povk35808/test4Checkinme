@@ -17,7 +17,6 @@ import {
   where,
   getDocs,
   getDoc, // <-- *** ថ្មី: បន្ថែម getDoc ***
-  getDocFromServer, // <-- *** ថ្មី: បន្ថែម getDocFromServer ***
   deleteDoc, // <-- *** ថ្មី: បន្ថែម deleteDoc ***
 } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 import {
@@ -54,7 +53,6 @@ let isTimeSynced = false;
 // --- អថេរសម្រាប់គ្រប់គ្រង Session (Device Lock) ---
 let sessionCollectionRef = null;
 let sessionListener = null;
-let visibilityListener = null; // <-- *** សូមប្រាកដថាអ្នកបានបន្ថែមបន្ទាត់នេះ ***
 let currentDeviceId = null;
 
 // --- AI & Camera Global Variables ---
@@ -1387,42 +1385,20 @@ function renderEmployeeList(employees) {
 // ស្វែងរក Function ឈ្មោះ "selectUser"
 // ស្វែងរក Function ឈ្មោះ "selectUser"
 // ស្វែងរក Function ឈ្មោះ "selectUser"
-// ស្វែងរក Function ឈ្មោះ "selectUser"
-// ស្វែងរក Function ឈ្មោះ "selectUser"
-// ស្វែងរក Function ឈ្មោះ "selectUser"
 async function selectUser(employee) {
   console.log("User selected:", employee);
 
-  // --- *** ថ្មី: ពិនិត្យ Session Lock (រួមទាំង Status) *** ---
+  // --- *** ពិនិត្យ Session Lock (កូដពីមុន) *** ---
   const sessionDocRef = doc(sessionCollectionRef, employee.id);
   try {
-    // --- *** នេះគឺជាការកែប្រែដ៏សំខាន់បំផុត *** ---
-    // យើងប្រើ getDocFromServer ដើម្បីប្រាកដថាយើងកំពុងអានទិន្នន័យពិតពី Server
-    // មិនមែនទិន្នន័យពី Cache ដែលហួសសម័យទេ
-    console.log("Forcing server check for session...");
-    const docSnap = await getDocFromServer(sessionDocRef);
-    // --- *** ចប់ការកែប្រែ *** ---
+    const docSnap = await getDoc(sessionDocRef);
     
     if (docSnap.exists()) {
-      console.log("Session doc exists on server.");
       const sessionData = docSnap.data();
-      const sessionStatus = sessionData.status || null;
       const sessionTimestamp = new Date(sessionData.timestamp).getTime();
       const sessionAge = getSyncedTime().getTime() - sessionTimestamp;
 
-      // ករណីទី១៖ គណនីត្រូវបាន Block ដោយ Admin
-      if (sessionStatus === "Block") {
-        console.warn("Login BLOCKED. Account is manually blocked by Admin.");
-        showMessage(
-          "គណនីถูก Block",
-          `គណនីនេះ (${employee.name}) ត្រូវបាន Block ដោយ Admin។ សូមទាក់ទងអ្នកគ្រប់គ្រង។`,
-          true
-        );
-        return; 
-      }
-
-      // ករណីទី២៖ គណនី "Active" ហើយមិនទាន់ Stale (ក្រោម 24h)
-      if (sessionStatus === "Active" && sessionAge < SESSION_TIMEOUT_MS) {
+      if (sessionAge < SESSION_TIMEOUT_MS) {
         console.warn("Login BLOCKED. Session is active on another device.");
         showMessage(
           "មិនអាចចូលប្រើបាន",
@@ -1430,19 +1406,12 @@ async function selectUser(employee) {
           true
         );
         return; 
+      } else {
+        console.log("Stale session detected (> 24h). Overwriting...");
       }
-
-      // ករណីទី៣៖ "Offline", "Active" (Stale >= 24h), ឬ null
-      console.log("Stale, Offline, or invalid session detected. Overwriting...");
-      
-    } else {
-      // ករណីទី៤៖ docSnap.exists() === false (មិនមាន Session) -> ល្អបំផុត
-      console.log("No session doc found on server. Proceeding with login.");
     }
-    // (បន្តដំណើរការ)
-
   } catch (e) {
-    console.error("Failed to check session doc from server:", e);
+    console.error("Failed to check session doc:", e);
     showMessage("បញ្ហា Session", `មិនអាចពិនិត្យ Session Lock បានទេ៖ ${e.message}`, true);
     return;
   }
@@ -1454,18 +1423,14 @@ async function selectUser(employee) {
   localStorage.setItem("currentDeviceId", currentDeviceId);
 
   try {
-    // ពេល Login ជោគជ័យ, status គឺ "Active" ជានិច្ច
+    // --- *** នេះជាកន្លែងកែប្រែ *** ---
     await setDoc(sessionDocRef, { 
       deviceId: currentDeviceId,
       timestamp: getSyncedTime().toISOString(),
-      status: "Active",
-      
       employeeName: employee.name,
-      employeeId: employee.id,
-      employeeGrade: employee.grade,
-      employeePhoto: employee.photoUrl,
-      employeeGroup: employee.group,
+      status: "Active", // <-- *** ថ្មី: បន្ថែម Status ***
     });
+    // --- *** ចប់ *** ---
     console.log(
       `Session lock set for ${employee.id} with deviceId ${currentDeviceId}`
     );
@@ -1479,7 +1444,7 @@ async function selectUser(employee) {
     return;
   }
 
-  // (កូដខាងក្រោមទាំងអស់ក្នុង selectUser ទុកដដែល មិនផ្លាស់ប្តូរ)
+  // ... (កូដខាងក្រោមទាំងអស់ក្នុង selectUser ទុកដដែល)
   currentUser = employee;
   localStorage.setItem("savedEmployeeId", employee.id);
 
@@ -1519,12 +1484,11 @@ async function selectUser(employee) {
   checkOutButton.disabled = true;
   attendanceStatus.textContent = "កំពុងទាញប្រវត្តិវត្តមាន...";
   attendanceStatus.className =
-    "text-center text-sm text-gray-500 pb4 px-6 h-5 animate-pulse";
+    "text-center text-sm text-gray-500 pb-4 px-6 h-5 animate-pulse";
 
   await startLeaveListeners();
   setupAttendanceListener();
-  startSessionListener(employee.id);
-  startVisibilityListener(employee.id);
+  startSessionListener(employee.id); // <--- Function នេះឥឡូវសំខាន់ណាស់
 
   if (timeCheckInterval) clearInterval(timeCheckInterval);
   timeCheckInterval = setInterval(updateButtonState, 30000);
@@ -1535,20 +1499,11 @@ async function selectUser(employee) {
   employeeListContainer.classList.add("hidden");
   searchInput.value = "";
 }
-
-  
-
+                                     
   
 // ស្វែងរក Function ឈ្មោះ "logout"
 async function logout() { // --- ថ្មី: បន្ថែម async ---
 
-// --- *** ថ្មី: បញ្ឈប់ Visibility Listener *** ---
-  if (visibilityListener) {
-    document.removeEventListener("visibilitychange", visibilityListener);
-    visibilityListener = null;
-  }
-  // --- *** ចប់ *** ---
-  
   // --- *** ថ្មី: លុប Session Lock ពី Firestore *** ---
   if (currentUser && sessionCollectionRef) {
     try {
