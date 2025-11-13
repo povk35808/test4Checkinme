@@ -1401,17 +1401,15 @@ function renderEmployeeList(employees) {
 // ស្វែងរក Function ឈ្មោះ "selectUser"
 // ស្វែងរក Function ឈ្មោះ "selectUser"
 // ស្វែងរក Function ឈ្មោះ "selectUser"
+// ស្វែងរក Function ឈ្មោះ "selectUser"
 async function selectUser(employee) {
   console.log("User selected:", employee);
 
   const sessionDocRef = doc(sessionCollectionRef, employee.id);
-  // (ទាញយក localDeviceId ឬ បង្កើតថ្មី)
   const localDeviceId = localStorage.getItem("currentDeviceId") || self.crypto.randomUUID();
 
-  // --- *** Logic ការពារការ Login ថ្មី *** ---
   try {
     console.log("Forcing server check for session...");
-    // (ប្រើ getDocFromServer ដើម្បីទម្លុះ Cache)
     const docSnap = await getDocFromServer(sessionDocRef);
 
     if (docSnap.exists()) {
@@ -1419,43 +1417,66 @@ async function selectUser(employee) {
       const sessionStatus = sessionData.status || null;
       const sessionDeviceId = sessionData.deviceId || null;
 
+      // --- *** នេះគឺជាការកែប្រែ (ដោះស្រាយបញ្ហាទាំង ៣) *** ---
       // ករណីទី១៖ Admin បាន Block
       if (sessionStatus === "Block") {
         console.warn("Login BLOCKED. Account is manually blocked by Admin.");
+        
+        // 1. ចាប់ផ្ដើម Listener ភ្លាមៗ (ដើម្បីឱ្យ Admin អាច Unblock Real-time)
+        startSessionListener(employee.id); 
+
+        // 2. កែភាសាថៃ
         showMessage(
-          "គណនី Block",
+          "គណនីត្រូវបានទប់ស្កាត់", // << កែភាសាថៃ "ถูก Block"
           `គណនីនេះ (${employee.name}) ត្រូវបាន Block ដោយ Admin។ សូមទាក់ទងអ្នកគ្រប់គ្រង។`,
           true
         );
-        return; // រារាំង
+        
+        // 3. កំណត់ Callback សម្រាប់ប៊ូតុង "យល់ព្រម" (ដើម្បីកុំឱ្យគាំង)
+        currentConfirmCallback = () => {
+          console.log("User acknowledged block. Forcing local logout.");
+          
+          // បញ្ឈប់ Listener ដែលយើងទើបចាប់ផ្ដើម
+          if (sessionListener) {
+            sessionListener();
+            sessionListener = null;
+          }
+          
+          // សម្អាត Storage ចាស់
+          localStorage.removeItem("savedEmployeeId");
+          localStorage.removeItem("currentDeviceId"); 
+          currentDeviceId = null;
+          currentUser = null;
+          
+          hideMessage();
+          changeView("employeeListView"); // ត្រឡប់ទៅទំព័រជ្រើសរើសឈ្មោះ
+        };
+        
+        return; // រារាំងការ Login
       }
+      // --- *** ចប់ការកែប្រែ *** ---
 
-      // ករណីទី២៖ គណនី "Free" (Admin/User បាន Unblock)
+      // ករណីទី២៖ គណនី "Free"
       if (sessionStatus === "Free") {
         console.log("Session is 'Free'. Proceeding with login.");
-        // (បន្តដំណើរការ -> នឹងសរសេរทับ)
       
-      // ករណីទី៣៖ គណនី "Active" ឬ "Offline" (កំពុងចាក់សោ)
+      // ករណីទី៣៖ "Active" ឬ "Offline"
       } else if (sessionStatus === "Active" || sessionStatus === "Offline") {
         
-        // ពិនិត្យមើលថាតើជាឧបករណ៍ដដែលឬអត់
         if (sessionDeviceId === localDeviceId) {
           console.log("Device ID matches. Reconnecting...");
-          // (បន្តដំណើរការ - នេះជាការ Reconnect ឧបករណ៍ដដែល)
         } else {
-          // បើ Device ID មិនដូច -> រារាំងឧបករណ៍ផ្សេង
           console.warn("Login BLOCKED. Session is active on another device.");
           showMessage(
             "មិនអាចចូលប្រើបាន",
             `គណនីនេះ (${employee.name}) កំពុងចាក់សោលើឧបករណ៍ផ្សេង។ សូម Logout ពីឧបករណ៍នោះ ឬស្នើ Admin ឱ្យកំណត់ 'Free'។`,
             true
           );
-          return; // រារាំង
+          return; 
         }
       }
       
     } else {
-      // ករណីទី៤៖ មិនមាន Document (Login លើកដំបូង) -> ល្អ
       console.log("No session doc found. Proceeding with login.");
     }
 
@@ -1464,26 +1485,21 @@ async function selectUser(employee) {
     showMessage("បញ្ហា Session", `មិនអាចពិនិត្យ Session Lock បានទេ៖ ${e.message}`, true);
     return;
   }
-  // --- *** ចប់ការពិនិត្យ *** ---
 
-  // បើមកដល់ចំណុចនេះ = អនុញ្ញាតឱ្យ Login
-  currentDeviceId = localDeviceId;
+  // (កូដខាងក្រោមទាំងអស់ក្នុង selectUser ទុកដដែល មិនផ្លាស់ប្តូរ)
+  currentDeviceId = localDeviceId; 
   localStorage.setItem("currentDeviceId", currentDeviceId);
 
   try {
-    // ពេល Login ជោគជ័យ, status គឺ "Active" ជានិច្ច
     await setDoc(sessionDocRef, { 
-      // ទិន្នន័យ Session
       deviceId: currentDeviceId,
       timestamp: getSyncedTime().toISOString(),
       status: "Active",
-      
-      // --- *** នេះជាទិន្នន័យបន្ថែម តាមសំណើ *** ---
       employeeName: employee.name,
-      employeeId: employee.id,        // អត្តលេខ
-      employeeGrade: employee.grade,  // ថ្នាក់
-      employeePhoto: employee.photoUrl, // រូបថត
-      employeeGroup: employee.group,    // ក្រុម
+      employeeId: employee.id,
+      employeeGrade: employee.grade,
+      employeePhoto: employee.photoUrl,
+      employeeGroup: employee.group,
     });
     console.log(
       `Session lock set for ${employee.id} with deviceId ${currentDeviceId}`
@@ -1498,7 +1514,6 @@ async function selectUser(employee) {
     return;
   }
 
-  // (កូដខាងក្រោមទាំងអស់ក្នុង selectUser ទុកដដែល)
   currentUser = employee;
   localStorage.setItem("savedEmployeeId", employee.id);
 
@@ -1543,7 +1558,7 @@ async function selectUser(employee) {
   await startLeaveListeners();
   setupAttendanceListener();
   startSessionListener(employee.id);
-  startVisibilityListener(employee.id); // <--- ហៅ Function Active/Offline
+  startVisibilityListener(employee.id);
 
   if (timeCheckInterval) clearInterval(timeCheckInterval);
   timeCheckInterval = setInterval(updateButtonState, 30000);
