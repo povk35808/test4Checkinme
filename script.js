@@ -51,13 +51,13 @@ let timeCheckInterval = null;
 let timeOffset = 0;
 let isTimeSynced = false;
 
-// --- អថេរសម្រាប់គ្រប់គ្រង Session (Device Lock) ---
-let sessionCollectionRef = null;
+// ...
 let sessionListener = null;
-let visibilityListener = null; // <-- *** សូមប្រាកដថាបន្ទាត់នេះមាន! ***
+let visibilityListener = null; // (មានរួចហើយ)
+let pageHideListener = null;   // <-- *** ថ្មី ***
+let pageShowListener = null;   // <-- *** ថ្មី ***
 let currentDeviceId = null;
-
-// --- AI & Camera Global Variables ---
+// ...
 let modelsLoaded = false;
 let currentUserFaceMatcher = null;
 let currentScanAction = null;
@@ -1557,17 +1557,27 @@ async function selectUser(employee) {
 // ស្វែងរក Function ឈ្មោះ "logout"
 // ស្វែងរក Function ឈ្មោះ "logout"
 async function logout() { 
-  // បញ្ឈប់ Listeners
+  // --- *** ថ្មី: បញ្ឈប់ Listeners ទាំងអស់ *** ---
   if (visibilityListener) {
     document.removeEventListener("visibilitychange", visibilityListener);
     visibilityListener = null;
   }
+  if (pageHideListener) { // <-- ថ្មី
+    window.removeEventListener("pagehide", pageHideListener);
+    pageHideListener = null;
+  }
+  if (pageShowListener) { // <-- ថ្មី
+    window.removeEventListener("pageshow", pageShowListener);
+    pageShowListener = null;
+  }
+  // --- *** ចប់ *** ---
+
   if (sessionListener) {
     sessionListener();
     sessionListener = null;
   }
 
-  // --- *** ថ្មី: កំណត់ Status ទៅ "Free" ជំនួសឱ្យការលុប *** ---
+  // (កូដ Update ទៅ "Free" ទុកដដែល)
   if (currentUser && sessionCollectionRef) {
     try {
       const sessionDocRef = doc(sessionCollectionRef, currentUser.id);
@@ -1579,7 +1589,6 @@ async function logout() {
       console.error("Failed to set session status to 'Free':", e);
     }
   }
-  // --- *** ចប់ *** ---
 
   currentUser = null;
   currentUserShift = null;
@@ -1638,46 +1647,70 @@ async function logout() {
 // (ត្រូវប្រាកដថាអថេរនេះមាននៅ Global)
 // let visibilityListener = null; 
 
+// (ត្រូវប្រាកដថាអថេរ Global ទាំងនេះមាន)
+// let visibilityListener = null;
+// let pageHideListener = null;
+// let pageShowListener = null;
+
+// ស្វែងរក Function ឈ្មោះ "startVisibilityListener"
 function startVisibilityListener(employeeId) {
   if (!sessionCollectionRef) return;
 
   const sessionDocRef = doc(sessionCollectionRef, employeeId);
 
-  // 1. បញ្ឈប់ Listener ចាស់ (ប្រសិនបើមាន)
+  // --- ថ្មី: បង្កើត Function សម្រាប់ Update Status ---
+  const updateStatus = async (newStatus) => {
+    if (!currentUser || !currentDeviceId) return;
+    const localDeviceId = localStorage.getItem("currentDeviceId");
+    if (currentDeviceId !== localDeviceId) return;
+
+    console.log(`Presence Update: Setting status to: ${newStatus}`);
+    try {
+      await updateDoc(sessionDocRef, {
+        status: newStatus,
+        timestamp: getSyncedTime().toISOString(),
+      });
+    } catch (e) {
+      console.warn(`Failed to update presence status: ${e.message}`);
+    }
+  };
+  // --- ចប់ ---
+
+  // 1. គ្រប់គ្រងការប្តូរ Tab (Minimize/Switch Tab)
   if (visibilityListener) {
     document.removeEventListener("visibilitychange", visibilityListener);
   }
-
-  // 2. បង្កើត Listener ថ្មី
-  visibilityListener = async () => {
-    if (!currentUser || !currentDeviceId) {
-      return; // ចេញប្រសិនបើ Logout
-    }
-
-    const localDeviceId = localStorage.getItem("currentDeviceId");
-    // (ពិនិត្យ Device ID ម្តងទៀត មុននឹងសរសេរ)
-    if (currentDeviceId !== localDeviceId) {
-      return; 
-    }
-    
-    // (ប្រើ "Offline" ជំនួស "office" ព្រោះវាត្រឹមត្រូវជាង)
-    let newStatus =
-      document.visibilityState === "visible" ? "Active" : "Offline";
-    console.log(`Visibility changed. Setting status to: ${newStatus}`);
-
-    try {
-      // (យើង Update តែ status  thôi)
-      await updateDoc(sessionDocRef, {
-        status: newStatus,
-        timestamp: getSyncedTime().toISOString(), // Update ម៉ោងផងដែរ
-      });
-    } catch (e) {
-      console.warn(`Failed to update visibility status: ${e.message}`);
+  visibilityListener = () => {
+    if (document.visibilityState === "visible") {
+      updateStatus("Active");
+    } else {
+      updateStatus("Offline");
     }
   };
-
-  // 3. ភ្ជាប់ Listener ទៅ Browser
   document.addEventListener("visibilitychange", visibilityListener);
+
+  // --- *** ថ្មី: គ្រប់គ្រងការបិទ Tab (Close App) *** ---
+  // 2. គ្រប់គ្រងការបិទ App (pagehide គឺ Event ចុងក្រោយ)
+  if (pageHideListener) {
+    window.removeEventListener("pagehide", pageHideListener);
+  }
+  pageHideListener = () => {
+    // នេះជាឱកាសចុងក្រោយ ត្រូវ Update ទៅ "Offline"
+    updateStatus("Offline");
+  };
+  window.addEventListener("pagehide", pageHideListener);
+  // --- *** ចប់ *** ---
+
+  // 3. គ្រប់គ្រងការបើក App (ពេលប្រើ Back/Forward cache)
+  if (pageShowListener) {
+    window.removeEventListener("pageshow", pageShowListener);
+  }
+  pageShowListener = (event) => {
+    if (event.persisted) {
+      updateStatus("Active");
+    }
+  };
+  window.addEventListener("pageshow", pageShowListener);
 }
 
 // ស្វែងរក Function ឈ្មោះ "forceLogout"
