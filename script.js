@@ -40,7 +40,7 @@ let outCollectionListener = null;
 let currentConfirmCallback = null;
 let timeCheckInterval = null;
 
-// --- *** ថ្មី: អថេរសម្រាប់គ្រប់គ្រងម៉ោង Server Time *** ---
+// --- *** កែប្រែ: អថេរសម្រាប់គ្រប់គ្រងម៉ោង Server Time *** ---
 let timeOffset = 0; // គម្លាតរវាងម៉ោង Server និង ម៉ោង Local
 let isTimeSynced = false; // តើ Time Sync រួចរាល់ហើយឬនៅ?
 // --- *********************************************** ---
@@ -184,46 +184,42 @@ const employeeListContent = document.getElementById("employeeListContent");
 
 // --- Helper Functions ---
 
-// --- *** ថ្មី: Function សម្រាប់ទាញយកម៉ោងពិត *** ---
 function getSyncedTime() {
   if (!isTimeSynced) {
-    // ប្រសិនបើ Time Sync បរាជ័យ, ប្រើម៉ោង Local (មិនសូវសុវត្ថិភាព)
-    // ក្នុងករណីពិតប្រាកដ យើងគួរតែប្លុកកម្មវិធី
+    // បើយังមិន Sync ប្រើម៉ោង Local បណ្ដោះអាសន្ន
+    // (Listener នឹង Update វានៅពេលក្រោយ)
     return new Date();
   }
   return new Date(Date.now() + timeOffset);
 }
 
-// --- *** ថ្មី: Function សម្រាប់ Sync ម៉ោង Server ពេលបើកកម្មវិធី *** ---
-async function syncTime() {
-  try {
+// --- *** ថ្មី: Function សម្រាប់ Sync ម៉ោង Firebase (ជំនួស syncTime) *** ---
+function syncFirebaseTime() {
+  return new Promise((resolve, reject) => {
     loadingText.textContent = "កំពុងធ្វើសមកាលកម្មម៉ោង...";
-    // ហៅទៅ WorldTimeAPI សម្រាប់តំបន់ម៉ោងនៅភ្នំពេញ
-    const response = await fetch(
-      "https://worldtimeapi.org/api/timezone/Asia/Phnom_Penh",
-      { cache: "no-store" } // ធានាថាយើងទទួលបានម៉ោងថ្មីរាល់ពេល
+    const offsetRef = ref(dbAttendanceRTDB, ".info/serverTimeOffset");
+    onValue(
+      offsetRef,
+      (snapshot) => {
+        timeOffset = snapshot.val();
+        isTimeSynced = true;
+        console.log(`Time synced. Offset is: ${timeOffset}ms`);
+        resolve(); // ដោះស្រាយ Promise ពេលទទួលបាន Offset
+      },
+      (error) => {
+        console.error("Failed to sync Firebase time:", error);
+        isTimeSynced = false;
+        showMessage(
+          "បញ្ហាម៉ោង",
+          `មិនអាចធ្វើសមកាលកម្មម៉ោង Firebase បានទេ។ Error: ${error.message}`,
+          true
+        );
+        reject(error); // ច្រានចោល Promise ពេលមាន Error
+      }
     );
-    if (!response.ok) throw new Error("Network response was not ok");
-    const data = await response.json();
-
-    // គណនាគម្លាត (Offset)
-    const serverTime = new Date(data.utc_datetime).getTime();
-    const localTime = Date.now();
-    timeOffset = serverTime - localTime;
-    isTimeSynced = true;
-    console.log(`Time synced. Offset is: ${timeOffset}ms`);
-  } catch (error) {
-    console.error("Failed to sync time:", error);
-    isTimeSynced = false;
-    // បង្ហាញ Error ធ្ងន់ធ្ងរ ព្រោះកម្មវិធីមិនអាចដំណើរការដោយគ្មានម៉ោងត្រឹមត្រូវ
-    showMessage(
-      "បញ្ហាម៉ោង",
-      `មិនអាចធ្វើសមកាលកម្មម៉ោង Server បានទេ។ សូមប្រាកដថាអ្នកមានអ៊ីនធឺណិត រួចបិទបើកកម្មវិធីឡើងវិញ។ Error: ${error.message}`,
-      true
-    );
-    throw error; // បញ្ឈប់ការផ្ទុកកម្មវិធី
-  }
+  });
 }
+
 
 function changeView(viewId) {
   loadingView.style.display = "none";
@@ -285,7 +281,6 @@ function hideMessage() {
   currentConfirmCallback = null;
 }
 
-// *** កែប្រែ: ប្រើ getSyncedTime() ជា Default ***
 function getTodayDateString(date = getSyncedTime()) {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
@@ -293,7 +288,6 @@ function getTodayDateString(date = getSyncedTime()) {
   return `${year}-${month}-${day}`;
 }
 
-// *** កែប្រែ: ប្រើ getSyncedTime() ***
 function getCurrentMonthRange() {
   const now = getSyncedTime();
   const year = now.getFullYear();
@@ -392,7 +386,6 @@ function convertTimeFormat(timeString) {
   }
 }
 
-// *** កែប្រែ: ប្រើ getSyncedTime() ***
 function checkShiftTime(shiftType, checkType) {
   if (!allShiftRules) {
     console.warn("Shift rules not loaded from Firebase yet.");
@@ -413,7 +406,7 @@ function checkShiftTime(shiftType, checkType) {
     return false;
   }
 
-  const now = getSyncedTime(); // *** កែប្រែ ***
+  const now = getSyncedTime();
   const currentHour = now.getHours();
   const currentMinute = now.getMinutes();
   const currentTime = currentHour + currentMinute / 60;
@@ -799,14 +792,13 @@ async function prepareFaceMatcher(imageUrl) {
   }
 }
 
-// *** កែប្រែ: ប្រើ getSyncedTime() ***
 async function checkLeaveStatus(employeeId, checkType) {
   if (!dbLeave) {
     console.warn("Leave Database (dbLeave) is not initialized.");
     return null;
   }
 
-  const todayString = formatDate(getSyncedTime()); // *** កែប្រែ ***
+  const todayString = formatDate(getSyncedTime());
   const leaveCollectionPath =
     "/artifacts/default-app-id/public/data/out_requests";
 
@@ -849,7 +841,6 @@ async function checkLeaveStatus(employeeId, checkType) {
   }
 }
 
-// *** កែប្រែ: ប្រើ getSyncedTime() ***
 async function checkFullLeaveStatus(employeeId, checkType) {
   if (!dbLeave) {
     console.warn("Leave Database (dbLeave) is not initialized.");
@@ -859,11 +850,11 @@ async function checkFullLeaveStatus(employeeId, checkType) {
   const leaveCollectionPath =
     "/artifacts/default-app-id/public/data/leave_requests";
 
-  const today = getSyncedTime(); // *** កែប្រែ ***
+  const today = getSyncedTime();
   today.setHours(0, 0, 0, 0);
   const todayTimestamp = today.getTime();
 
-  const todayString_DD_Mon_YYYY = formatDate(today); // *** កែប្រែ ***
+  const todayString_DD_Mon_YYYY = formatDate(today);
 
   const q = query(
     collection(dbLeave, leaveCollectionPath),
@@ -1148,7 +1139,7 @@ function fetchShiftRules() {
   );
 }
 
-// *** កែប្រែ: ហៅ await syncTime() មុនគេ ***
+// --- *** កែប្រែ: ហៅ syncFirebaseTime() ជំនួស syncTime() *** ---
 async function setupAuthListener() {
   return new Promise((resolve, reject) => {
     onAuthStateChanged(authAttendance, async (user) => {
@@ -1156,12 +1147,12 @@ async function setupAuthListener() {
         console.log("Firebase Auth user signed in:", user.uid);
         
         try {
-          await syncTime(); // *** ថ្មី: ត្រូវតែ Sync ម៉ោងមុនគេ ***
+          await syncFirebaseTime(); // *** ថ្មី: ត្រូវតែ Sync ម៉ោងមុនគេ ***
           fetchShiftRules();
           await loadAIModels();
           resolve();
         } catch (error) {
-          // syncTime() នឹងបង្ហាញ Error Message រួចហើយ
+          // syncFirebaseTime() នឹងបង្ហាញ Error Message រួចហើយ
           console.error("Failed to init app due to time sync error.");
           reject(error);
         }
@@ -1316,7 +1307,7 @@ async function selectUser(employee) {
     const sessionDocRef = doc(sessionCollectionRef, employee.id);
     await setDoc(sessionDocRef, {
       deviceId: currentDeviceId,
-      timestamp: new Date().toISOString(), // ម៉ោង Sign in នេះ អាចប្រើម៉ោង Local បាន
+      timestamp: new Date().toISOString(),
       employeeName: employee.name,
     });
     console.log(
@@ -1335,7 +1326,7 @@ async function selectUser(employee) {
   currentUser = employee;
   localStorage.setItem("savedEmployeeId", employee.id);
 
-  const dayOfWeek = getSyncedTime().getDay(); // *** កែប្រែ: ប្រើ getSyncedTime() ***
+  const dayOfWeek = getSyncedTime().getDay();
   const dayToShiftKey = [
     "shiftSun",
     "shiftMon",
@@ -1888,7 +1879,6 @@ async function updateButtonState() {
 }
 
 
-// *** កែប្រែ: ប្រើ getSyncedTime() ***
 async function handleCheckIn() {
   if (!attendanceCollectionRef || !currentUser) return;
 
@@ -1927,8 +1917,8 @@ async function handleCheckIn() {
 
   attendanceStatus.textContent = "កំពុងដំណើរការ Check-in...";
 
-  const now = getSyncedTime(); // *** កែប្រែ ***
-  const todayDocId = getTodayDateString(now); // *** កែប្រែ ***
+  const now = getSyncedTime();
+  const todayDocId = getTodayDateString(now);
 
   const data = {
     employeeId: currentUser.id,
@@ -1939,10 +1929,10 @@ async function handleCheckIn() {
     gender: currentUser.gender,
     shift: currentUserShift,
     date: todayDocId,
-    checkInTimestamp: now.toISOString(), // ប្រើម៉ោងដែលបាន Sync
+    checkInTimestamp: now.toISOString(),
     checkOutTimestamp: null,
-    formattedDate: formatDate(now), // ប្រើម៉ោងដែលបាន Sync
-    checkIn: formatTime(now), // ប្រើម៉ោងដែលបាន Sync
+    formattedDate: formatDate(now),
+    checkIn: formatTime(now),
     checkOut: null,
     checkInLocation: { lat: userCoords.latitude, lon: userCoords.longitude },
   };
@@ -1959,7 +1949,6 @@ async function handleCheckIn() {
   }
 }
 
-// *** កែប្រែ: ប្រើ getSyncedTime() ***
 async function handleCheckOut() {
   if (!attendanceCollectionRef) return;
 
@@ -1998,12 +1987,12 @@ async function handleCheckOut() {
 
   attendanceStatus.textContent = "កំពុងដំណើរការ Check-out...";
 
-  const now = getSyncedTime(); // *** កែប្រែ ***
-  const todayDocId = getTodayDateString(now); // *** កែប្រែ ***
+  const now = getSyncedTime();
+  const todayDocId = getTodayDateString(now);
 
   const data = {
-    checkOutTimestamp: now.toISOString(), // ប្រើម៉ោងដែលបាន Sync
-    checkOut: formatTime(now), // ប្រើម៉ោងដែលបាន Sync
+    checkOutTimestamp: now.toISOString(),
+    checkOut: formatTime(now),
     checkOutLocation: { lat: userCoords.latitude, lon: userCoords.longitude },
   };
 
