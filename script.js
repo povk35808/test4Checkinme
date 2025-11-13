@@ -1385,31 +1385,52 @@ function renderEmployeeList(employees) {
 // ស្វែងរក Function ឈ្មោះ "selectUser"
 // ស្វែងរក Function ឈ្មោះ "selectUser"
 // ស្វែងរក Function ឈ្មោះ "selectUser"
+// ស្វែងរក Function ឈ្មោះ "selectUser"
 async function selectUser(employee) {
   console.log("User selected:", employee);
 
-  // --- *** ពិនិត្យ Session Lock (កូដពីមុន) *** ---
+  // --- *** ថ្មី: ពិនិត្យ Session Lock (រួមទាំង Status) *** ---
   const sessionDocRef = doc(sessionCollectionRef, employee.id);
   try {
     const docSnap = await getDoc(sessionDocRef);
     
     if (docSnap.exists()) {
       const sessionData = docSnap.data();
+      const sessionStatus = sessionData.status || null;
       const sessionTimestamp = new Date(sessionData.timestamp).getTime();
       const sessionAge = getSyncedTime().getTime() - sessionTimestamp;
 
-      if (sessionAge < SESSION_TIMEOUT_MS) {
+      // ករណីទី១៖ គណនីត្រូវបាន Block ដោយ Admin (សំខាន់បំផុត)
+      if (sessionStatus === "Block") {
+        console.warn("Login BLOCKED. Account is manually blocked by Admin.");
+        showMessage(
+          "គណនីถูก Block",
+          `គណនីនេះ (${employee.name}) ត្រូវបាន Block ដោយ Admin។ សូមទាក់ទងអ្នកគ្រប់គ្រង។`,
+          true
+        );
+        return; // បញ្ឈប់ការ Login
+      }
+
+      // ករណីទី២៖ គណនីកំពុង "Active" ហើយមិនទាន់ Stale (ក្រោម 24h)
+      // នេះគឺជា Logic "ឧបករណ៍តែមួយ" ពីមុន
+      if (sessionStatus === "Active" && sessionAge < SESSION_TIMEOUT_MS) {
         console.warn("Login BLOCKED. Session is active on another device.");
         showMessage(
           "មិនអាចចូលប្រើបាន",
           `គណនីនេះ (${employee.name}) កំពុងត្រូវបានប្រើនៅលើឧបករណ៍ផ្សេង។ សូមធ្វើការ Logout ចេញពីឧបករណ៍នោះជាមុនសិន។`,
           true
         );
-        return; 
-      } else {
-        console.log("Stale session detected (> 24h). Overwriting...");
+        return; // បញ្ឈប់ការ Login
       }
+
+      // ករណីទី៣៖ Session គឺ "Active" តែ Stale (>= 24h) 
+      // ឬ status មិនស្គាល់ (null) -> អាចសរសេរทับបាន
+      console.log("Stale or invalid session detected. Overwriting...");
+      
     }
+    // ករណីទី៤៖ docSnap.exists() === false (មិនមាន Session) -> ល្អបំផុត
+    // (បន្តដំណើរការ)
+
   } catch (e) {
     console.error("Failed to check session doc:", e);
     showMessage("បញ្ហា Session", `មិនអាចពិនិត្យ Session Lock បានទេ៖ ${e.message}`, true);
@@ -1423,14 +1444,13 @@ async function selectUser(employee) {
   localStorage.setItem("currentDeviceId", currentDeviceId);
 
   try {
-    // --- *** នេះជាកន្លែងកែប្រែ *** ---
+    // ពេល Login ជោគជ័យ, status គឺ "Active" ជានិច្ច
     await setDoc(sessionDocRef, { 
       deviceId: currentDeviceId,
       timestamp: getSyncedTime().toISOString(),
       employeeName: employee.name,
-      status: "Active", // <-- *** ថ្មី: បន្ថែម Status ***
+      status: "Active",
     });
-    // --- *** ចប់ *** ---
     console.log(
       `Session lock set for ${employee.id} with deviceId ${currentDeviceId}`
     );
@@ -1444,7 +1464,7 @@ async function selectUser(employee) {
     return;
   }
 
-  // ... (កូដខាងក្រោមទាំងអស់ក្នុង selectUser ទុកដដែល)
+  // ... (កូដខាងក្រោមទាំងអស់ក្នុង selectUser ទុកដដែល មិនផ្លាស់ប្តូរ)
   currentUser = employee;
   localStorage.setItem("savedEmployeeId", employee.id);
 
@@ -1488,7 +1508,7 @@ async function selectUser(employee) {
 
   await startLeaveListeners();
   setupAttendanceListener();
-  startSessionListener(employee.id); // <--- Function នេះឥឡូវសំខាន់ណាស់
+  startSessionListener(employee.id);
 
   if (timeCheckInterval) clearInterval(timeCheckInterval);
   timeCheckInterval = setInterval(updateButtonState, 30000);
@@ -1499,7 +1519,7 @@ async function selectUser(employee) {
   employeeListContainer.classList.add("hidden");
   searchInput.value = "";
 }
-                                     
+
   
 // ស្វែងរក Function ឈ្មោះ "logout"
 async function logout() { // --- ថ្មី: បន្ថែម async ---
