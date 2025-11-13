@@ -1396,52 +1396,91 @@ function renderEmployeeList(employees) {
 // ស្វែងរក Function ឈ្មោះ "selectUser"
 // ស្វែងរក Function ឈ្មោះ "selectUser"
 // ស្វែងរក Function ឈ្មោះ "selectUser"
+// ស្វែងរក Function ឈ្មោះ "selectUser"
 async function selectUser(employee) {
   console.log("User selected:", employee);
 
-  // --- *** ពិនិត្យ Session Lock (កូដពីមុន) *** ---
   const sessionDocRef = doc(sessionCollectionRef, employee.id);
+  // (ទាញយក localDeviceId ឬ បង្កើតថ្មី)
+  const localDeviceId = localStorage.getItem("currentDeviceId") || self.crypto.randomUUID();
+
+  // --- *** Logic ការពារការ Login ថ្មី *** ---
   try {
-    const docSnap = await getDoc(sessionDocRef);
-    
+    console.log("Forcing server check for session...");
+    // (ប្រើ getDocFromServer ដើម្បីទម្លុះ Cache)
+    const docSnap = await getDocFromServer(sessionDocRef);
+
     if (docSnap.exists()) {
       const sessionData = docSnap.data();
-      const sessionTimestamp = new Date(sessionData.timestamp).getTime();
-      const sessionAge = getSyncedTime().getTime() - sessionTimestamp;
+      const sessionStatus = sessionData.status || null;
+      const sessionDeviceId = sessionData.deviceId || null;
 
-      if (sessionAge < SESSION_TIMEOUT_MS) {
-        console.warn("Login BLOCKED. Session is active on another device.");
+      // ករណីទី១៖ Admin បាន Block
+      if (sessionStatus === "Block") {
+        console.warn("Login BLOCKED. Account is manually blocked by Admin.");
         showMessage(
-          "មិនអាចចូលប្រើបាន",
-          `គណនីនេះ (${employee.name}) កំពុងត្រូវបានប្រើនៅលើឧបករណ៍ផ្សេង។ សូមធ្វើការ Logout ចេញពីឧបករណ៍នោះជាមុនសិន។`,
+          "គណនីถูก Block",
+          `គណនីនេះ (${employee.name}) ត្រូវបាន Block ដោយ Admin។ សូមទាក់ទងអ្នកគ្រប់គ្រង។`,
           true
         );
-        return; 
-      } else {
-        console.log("Stale session detected (> 24h). Overwriting...");
+        return; // រារាំង
       }
+
+      // ករណីទី២៖ គណនី "Free" (Admin/User បាន Unblock)
+      if (sessionStatus === "Free") {
+        console.log("Session is 'Free'. Proceeding with login.");
+        // (បន្តដំណើរការ -> នឹងសរសេរทับ)
+      
+      // ករណីទី៣៖ គណនី "Active" ឬ "Offline" (កំពុងចាក់សោ)
+      } else if (sessionStatus === "Active" || sessionStatus === "Offline") {
+        
+        // ពិនិត្យមើលថាតើជាឧបករណ៍ដដែលឬអត់
+        if (sessionDeviceId === localDeviceId) {
+          console.log("Device ID matches. Reconnecting...");
+          // (បន្តដំណើរការ - នេះជាការ Reconnect ឧបករណ៍ដដែល)
+        } else {
+          // បើ Device ID មិនដូច -> រារាំងឧបករណ៍ផ្សេង
+          console.warn("Login BLOCKED. Session is active on another device.");
+          showMessage(
+            "មិនអាចចូលប្រើបាន",
+            `គណនីនេះ (${employee.name}) កំពុងចាក់សោលើឧបករណ៍ផ្សេង។ សូម Logout ពីឧបករណ៍នោះ ឬស្នើ Admin ឱ្យកំណត់ 'Free'។`,
+            true
+          );
+          return; // រារាំង
+        }
+      }
+      
+    } else {
+      // ករណីទី៤៖ មិនមាន Document (Login លើកដំបូង) -> ល្អ
+      console.log("No session doc found. Proceeding with login.");
     }
+
   } catch (e) {
-    console.error("Failed to check session doc:", e);
+    console.error("Failed to check session doc from server:", e);
     showMessage("បញ្ហា Session", `មិនអាចពិនិត្យ Session Lock បានទេ៖ ${e.message}`, true);
     return;
   }
   // --- *** ចប់ការពិនិត្យ *** ---
 
-
   // បើមកដល់ចំណុចនេះ = អនុញ្ញាតឱ្យ Login
-  currentDeviceId = self.crypto.randomUUID();
+  currentDeviceId = localDeviceId;
   localStorage.setItem("currentDeviceId", currentDeviceId);
 
   try {
-    // --- *** នេះជាកន្លែងកែប្រែ *** ---
+    // ពេល Login ជោគជ័យ, status គឺ "Active" ជានិច្ច
     await setDoc(sessionDocRef, { 
+      // ទិន្នន័យ Session
       deviceId: currentDeviceId,
       timestamp: getSyncedTime().toISOString(),
+      status: "Active",
+      
+      // --- *** នេះជាទិន្នន័យបន្ថែម តាមសំណើ *** ---
       employeeName: employee.name,
-      status: "Active", // <-- *** ថ្មី: បន្ថែម Status ***
+      employeeId: employee.id,        // អត្តលេខ
+      employeeGrade: employee.grade,  // ថ្នាក់
+      employeePhoto: employee.photoUrl, // រូបថត
+      employeeGroup: employee.group,    // ក្រុម
     });
-    // --- *** ចប់ *** ---
     console.log(
       `Session lock set for ${employee.id} with deviceId ${currentDeviceId}`
     );
@@ -1455,7 +1494,7 @@ async function selectUser(employee) {
     return;
   }
 
-  // ... (កូដខាងក្រោមទាំងអស់ក្នុង selectUser ទុកដដែល)
+  // (កូដខាងក្រោមទាំងអស់ក្នុង selectUser ទុកដដែល)
   currentUser = employee;
   localStorage.setItem("savedEmployeeId", employee.id);
 
@@ -1499,7 +1538,8 @@ async function selectUser(employee) {
 
   await startLeaveListeners();
   setupAttendanceListener();
-  startSessionListener(employee.id); // <--- Function នេះឥឡូវសំខាន់ណាស់
+  startSessionListener(employee.id);
+  startVisibilityListener(employee.id); // <--- ហៅ Function Active/Offline
 
   if (timeCheckInterval) clearInterval(timeCheckInterval);
   timeCheckInterval = setInterval(updateButtonState, 30000);
@@ -1513,17 +1553,28 @@ async function selectUser(employee) {
                                      
   
 // ស្វែងរក Function ឈ្មោះ "logout"
-async function logout() { // --- ថ្មី: បន្ថែម async ---
+// ស្វែងរក Function ឈ្មោះ "logout"
+async function logout() { 
+  // បញ្ឈប់ Listeners
+  if (visibilityListener) {
+    document.removeEventListener("visibilitychange", visibilityListener);
+    visibilityListener = null;
+  }
+  if (sessionListener) {
+    sessionListener();
+    sessionListener = null;
+  }
 
-  // --- *** ថ្មី: លុប Session Lock ពី Firestore *** ---
+  // --- *** ថ្មី: កំណត់ Status ទៅ "Free" ជំនួសឱ្យការលុប *** ---
   if (currentUser && sessionCollectionRef) {
     try {
       const sessionDocRef = doc(sessionCollectionRef, currentUser.id);
-      await deleteDoc(sessionDocRef);
-      console.log(`Session lock deleted for ${currentUser.id}`);
+      await updateDoc(sessionDocRef, { 
+        status: "Free",
+      });
+      console.log(`Session status set to 'Free' for ${currentUser.id}`);
     } catch (e) {
-      console.error("Failed to delete session lock:", e);
-      // (បន្ត Logout ធម្មតា ទោះបី fail ក៏ដោយ)
+      console.error("Failed to set session status to 'Free':", e);
     }
   }
   // --- *** ចប់ *** ---
@@ -1533,19 +1584,13 @@ async function logout() { // --- ថ្មី: បន្ថែម async ---
   currentUserFaceMatcher = null;
 
   localStorage.removeItem("savedEmployeeId");
-  localStorage.removeItem("currentDeviceId");
+  localStorage.removeItem("currentDeviceId"); 
   currentDeviceId = null;
 
   if (attendanceListener) {
     attendanceListener();
     attendanceListener = null;
   }
-
-  if (sessionListener) {
-    sessionListener();
-    sessionListener = null;
-  }
-
   if (leaveCollectionListener) {
     leaveCollectionListener();
     leaveCollectionListener = null;
@@ -1572,7 +1617,6 @@ async function logout() { // --- ថ្មី: បន្ថែម async ---
       historyContainer.appendChild(noHistoryRow);
     }
   }
-
   if (monthlyHistoryContainer) {
     monthlyHistoryContainer.innerHTML = "";
     if (noMonthlyHistoryRow) {
@@ -1588,49 +1632,50 @@ async function logout() { // --- ថ្មី: បន្ថែម async ---
 }
 
 // ស្វែងរក Function ឈ្មោះ "startSessionListener"
-function startSessionListener(employeeId) {
-  if (sessionListener) {
-    sessionListener();
-  }
+// ស្វែងរក Function ឈ្មោះ "startSessionListener"
+// (ត្រូវប្រាកដថាអថេរនេះមាននៅ Global)
+// let visibilityListener = null; 
+
+function startVisibilityListener(employeeId) {
+  if (!sessionCollectionRef) return;
 
   const sessionDocRef = doc(sessionCollectionRef, employeeId);
 
-  sessionListener = onSnapshot(
-    sessionDocRef,
-    (docSnap) => {
-      if (!docSnap.exists()) {
-        console.warn("Session document deleted. Logging out.");
-        forceLogout("Session របស់អ្នកត្រូវបានបញ្ចប់។");
-        return;
-      }
+  // 1. បញ្ឈប់ Listener ចាស់ (ប្រសិនបើមាន)
+  if (visibilityListener) {
+    document.removeEventListener("visibilitychange", visibilityListener);
+  }
 
-      const sessionData = docSnap.data();
-
-      // --- *** ថ្មី: ពិនិត្យមើល Status "Block" *** ---
-      if (sessionData.status === "Block") {
-        console.warn("Session is BLOCKED by admin. Logging out.");
-        forceLogout("គណនីនេះត្រូវបាន Block ពី Admin។");
-        return; // ចេញពី Function ភ្លាម
-      }
-      // --- *** ចប់ *** ---
-
-
-      // (ពិនិត្យ Device ID ដូចដើម សម្រាប់ការ Login ឧបករណ៍ផ្សេង)
-      const firestoreDeviceId = sessionData.deviceId;
-      const localDeviceId = localStorage.getItem("currentDeviceId");
-
-      if (localDeviceId && firestoreDeviceId !== localDeviceId) {
-        console.warn("Session conflict detected. Logging out.");
-        // (យើងប្តូរសារ Error នេះ ព្រោះ Logic មុន បានរារាំងវាហើយ)
-        // (ប៉ុន្តែទុកវា នៅទីនេះ ក្រែង Admin ប្តូរ DeviceId ដោយដៃ)
-        forceLogout("Session របស់អ្នកត្រូវបានរំខាន។");
-      }
-    },
-    (error) => {
-      console.error("Error in session listener:", error);
-      forceLogout("មានបញ្ហាក្នុងការតភ្ជាប់ Session។");
+  // 2. បង្កើត Listener ថ្មី
+  visibilityListener = async () => {
+    if (!currentUser || !currentDeviceId) {
+      return; // ចេញប្រសិនបើ Logout
     }
-  );
+
+    const localDeviceId = localStorage.getItem("currentDeviceId");
+    // (ពិនិត្យ Device ID ម្តងទៀត មុននឹងសរសេរ)
+    if (currentDeviceId !== localDeviceId) {
+      return; 
+    }
+    
+    // (ប្រើ "Offline" ជំនួស "office" ព្រោះវាត្រឹមត្រូវជាង)
+    let newStatus =
+      document.visibilityState === "visible" ? "Active" : "Offline";
+    console.log(`Visibility changed. Setting status to: ${newStatus}`);
+
+    try {
+      // (យើង Update តែ status  thôi)
+      await updateDoc(sessionDocRef, {
+        status: newStatus,
+        timestamp: getSyncedTime().toISOString(), // Update ម៉ោងផងដែរ
+      });
+    } catch (e) {
+      console.warn(`Failed to update visibility status: ${e.message}`);
+    }
+  };
+
+  // 3. ភ្ជាប់ Listener ទៅ Browser
+  document.addEventListener("visibilitychange", visibilityListener);
 }
 
 // ស្វែងរក Function ឈ្មោះ "forceLogout"
