@@ -1555,53 +1555,31 @@ async function selectUser(employee) {
   searchInput.value = "";
 }
                                      
+
+// --- *** ថ្មី: Function សម្រាប់សម្អាត Session ក្នុង Local *** ---
+// (Function នេះ មិនមែន Async ទេ គឺវាលឿន)
+function clearLocalSession() {
+  console.log("Clearing local session state.");
   
-// ស្វែងរក Function ឈ្មោះ "logout"
-// ស្វែងរក Function ឈ្មោះ "logout"
-async function logout() { 
-  // --- *** ថ្មី: បញ្ឈប់ Listeners ទាំងអស់ *** ---
+  // បញ្ឈប់ Listeners ទាំងអស់
   if (visibilityListener) {
     document.removeEventListener("visibilitychange", visibilityListener);
     visibilityListener = null;
   }
-  if (pageHideListener) { // <-- ថ្មី
+  if (pageHideListener) {
     window.removeEventListener("pagehide", pageHideListener);
     pageHideListener = null;
   }
-  if (pageShowListener) { // <-- ថ្មី
+  if (pageShowListener) {
     window.removeEventListener("pageshow", pageShowListener);
     pageShowListener = null;
   }
-  // --- *** ចប់ *** ---
-
   if (sessionListener) {
-    sessionListener();
+    sessionListener(); // Unsubscribe
     sessionListener = null;
   }
-
-  // (កូដ Update ទៅ "Free" ទុកដដែល)
-  if (currentUser && sessionCollectionRef) {
-    try {
-      const sessionDocRef = doc(sessionCollectionRef, currentUser.id);
-      await updateDoc(sessionDocRef, { 
-        status: "Free",
-      });
-      console.log(`Session status set to 'Free' for ${currentUser.id}`);
-    } catch (e) {
-      console.error("Failed to set session status to 'Free':", e);
-    }
-  }
-
-  currentUser = null;
-  currentUserShift = null;
-  currentUserFaceMatcher = null;
-
-  localStorage.removeItem("savedEmployeeId");
-  localStorage.removeItem("currentDeviceId"); 
-  currentDeviceId = null;
-
   if (attendanceListener) {
-    attendanceListener();
+    attendanceListener(); // Unsubscribe
     attendanceListener = null;
   }
   if (leaveCollectionListener) {
@@ -1613,16 +1591,27 @@ async function logout() {
     outCollectionListener = null;
   }
 
+  // បញ្ឈប់ Timer
   if (timeCheckInterval) {
     clearInterval(timeCheckInterval);
     timeCheckInterval = null;
   }
+
+  // សម្អាតទិន្នន័យ User
+  currentUser = null;
+  currentUserShift = null;
+  currentUserFaceMatcher = null;
+  
+  localStorage.removeItem("savedEmployeeId");
+  localStorage.removeItem("currentDeviceId"); 
+  currentDeviceId = null;
 
   attendanceCollectionRef = null;
   currentMonthRecords = [];
   attendanceRecords = [];
   leaveRecords = [];
 
+  // សម្អាត UI (តែមិនប្តូរ View)
   if (historyContainer) {
     historyContainer.innerHTML = "";
     if (noHistoryRow) {
@@ -1640,7 +1629,31 @@ async function logout() {
 
   searchInput.value = "";
   employeeListContainer.classList.add("hidden");
+}
+// --- *** ចប់ Function ថ្មី *** ---
 
+// ស្វែងរក Function ឈ្មោះ "logout"
+// ស្វែងរក Function ឈ្មោះ "logout"
+async function logout() { 
+  
+  // ធ្វើការងារ Firestore ជាមុន
+  if (currentUser && sessionCollectionRef) {
+    try {
+      const sessionDocRef = doc(sessionCollectionRef, currentUser.id);
+      // កំណត់ Status ក្នុង Firebase ទៅ "Free"
+      await updateDoc(sessionDocRef, { 
+        status: "Free",
+      });
+      console.log(`Session status set to 'Free' for ${currentUser.id}`);
+    } catch (e) {
+      console.error("Failed to set session status to 'Free':", e);
+    }
+  }
+
+  // ហៅ Function សម្អាត (បន្ទាប់ពី await)
+  clearLocalSession();
+
+  // ជំហានចុងក្រោយ: ប្តូរ View
   changeView("employeeListView");
 }
 
@@ -1716,28 +1729,29 @@ function startVisibilityListener(employeeId) {
 }
 
 // ស្វែងរក Function ឈ្មោះ "forceLogout"
+// ស្វែងរក Function ឈ្មោះ "forceLogout"
 function forceLogout(message) {
-  logout();
+  
+  // --- *** កំណែកែប្រែ *** ---
+  // ហៅ Function សម្អាតថ្មី (វាមិន update Firestore និង លឿន)
+  clearLocalSession();
+  // --- *** ចប់ *** ---
 
   modalTitle.textContent = "បានចាកចេញដោយស្វ័យប្រវត្តិ";
   modalMessage.textContent = message;
   modalTitle.classList.remove("text-gray-800");
   modalTitle.classList.add("text-red-600");
 
-  // --- *** ថ្មី: លាក់កន្លែងប៊ូតុង *** ---
   modalActions.style.display = "none";
   currentConfirmCallback = null;
-  // --- *** ចប់ *** ---
 
   customModal.classList.remove("modal-hidden");
   customModal.classList.add("modal-visible");
 
-  // --- *** ថ្មី: បិទស្វ័យប្រវត្តិ 2 វិនាទី *** ---
   setTimeout(() => {
-    hideMessage(); // (This will hide the modal)
-    changeView("employeeListView"); // (This will go to login)
-  }, 2000); // 2 វិនាទី
-  // --- *** ចប់ *** ---
+    hideMessage(); 
+    changeView("employeeListView"); // ទៅទំព័រ Login
+  }, 2000); 
 }
 
 // ស្វែងរក Function ឈ្មោះ "startLeaveListeners"
