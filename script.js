@@ -1315,78 +1315,86 @@ function renderEmployeeList(employees) {
   });
 }
 
+// ស្វែងរក Function ឈ្មោះ "selectUser"
 async function selectUser(employee) {
-  console.log("User selected:", employee);
+  console.log("User selected:", employee);
 
-  currentDeviceId = self.crypto.randomUUID();
-  localStorage.setItem("currentDeviceId", currentDeviceId);
+  currentDeviceId = self.crypto.randomUUID();
+  localStorage.setItem("currentDeviceId", currentDeviceId);
 
-  try {
-    const sessionDocRef = doc(sessionCollectionRef, employee.id);
-    await setDoc(sessionDocRef, {
-      deviceId: currentDeviceId,
-      timestamp: new Date().toISOString(),
-      employeeName: employee.name,
-    });
-    console.log(
-      `Session lock set for ${employee.id} with deviceId ${currentDeviceId}`
-    );
-  } catch (e) {
-    console.error("Failed to set session lock:", e);
-    showMessage(
-      "បញ្ហា Session",
-      `មិនអាចកំណត់ Session Lock បានទេ៖ ${e.message}`,
-      true
-    );
-    return;
-  }
+  try {
+    const sessionDocRef = doc(sessionCollectionRef, employee.id);
+    await setDoc(sessionDocRef, {
+      deviceId: currentDeviceId,
+      timestamp: new Date().toISOString(),
+      employeeName: employee.name,
+    });
+    console.log(
+      `Session lock set for ${employee.id} with deviceId ${currentDeviceId}`
+    );
+  } catch (e) {
+    console.error("Failed to set session lock:", e);
+    showMessage(
+      "បញ្ហា Session",
+      `មិនអាចកំណត់ Session Lock បានទេ៖ ${e.message}`,
+      true
+    );
+    return;
+  }
 
-  currentUser = employee;
-  localStorage.setItem("savedEmployeeId", employee.id);
+  currentUser = employee;
+  localStorage.setItem("savedEmployeeId", employee.id);
 
-  const dayOfWeek = getSyncedTime().getDay();
-  const dayToShiftKey = [
-    "shiftSun",
-    "shiftMon",
-    "shiftTue",
-    "shiftWed",
-    "shiftThu",
-    "shiftFri",
-    "shiftSat",
-  ];
-  const shiftKey = dayToShiftKey[dayOfWeek];
-  currentUserShift = currentUser[shiftKey] || "N/A";
-  console.log(`ថ្ងៃនេះ (Day ${dayOfWeek}), វេនគឺ: ${currentUserShift}`);
+  const dayOfWeek = getSyncedTime().getDay();
+  const dayToShiftKey = [
+    "shiftSun",
+    "shiftMon",
+    "shiftTue",
+    "shiftWed",
+    "shiftThu",
+    "shiftFri",
+    "shiftSat",
+  ];
+  const shiftKey = dayToShiftKey[dayOfWeek];
+  currentUserShift = currentUser[shiftKey] || "N/A";
+  console.log(`ថ្ងៃនេះ (Day ${dayOfWeek}), វេនគឺ: ${currentUserShift}`);
 
-  const firestoreUserId = currentUser.id;
-  const simpleDataPath = `attendance/${firestoreUserId}/records`;
-  console.log("Using Firestore Path:", simpleDataPath);
-  attendanceCollectionRef = collection(dbAttendance, simpleDataPath);
+  const firestoreUserId = currentUser.id;
+  const simpleDataPath = `attendance/${firestoreUserId}/records`;
+  console.log("Using Firestore Path:", simpleDataPath);
+  attendanceCollectionRef = collection(dbAttendance, simpleDataPath);
 
-  welcomeMessage.textContent = `សូមស្វាគមន៍`;
-  profileImage.src =
-    employee.photoUrl || "https://placehold.co/80x80/e2e8f0/64748b?text=No+Img";
-  profileName.textContent = employee.name;
-  profileId.textContent = `អត្តលេខ: ${employee.id}`;
-  profileGender.textContent = `ភេទ: ${employee.gender}`;
-  profileDepartment.textContent = `ផ្នែក: ${employee.department}`;
-  profileGroup.textContent = `ក្រុម: ${employee.group}`;
-  profileGrade.textContent = `ថ្នាក់: ${employee.grade}`;
-  profileShift.textContent = `វេនថ្ងៃនេះ: ${currentUserShift}`;
+  welcomeMessage.textContent = `សូមស្វាគមន៍`;
+  profileImage.src =
+    employee.photoUrl || "https://placehold.co/80x80/e2e8f0/64748b?text=No+Img";
+  profileName.textContent = employee.name;
+  profileId.textContent = `អត្តលេខ: ${employee.id}`;
+  profileGender.textContent = `ភេទ: ${employee.gender}`;
+  profileDepartment.textContent = `ផ្នែក: ${employee.department}`;
+  profileGroup.textContent = `ក្រុម: ${employee.group}`;
+  profileGrade.textContent = `ថ្នាក់: ${employee.grade}`;
+  profileShift.textContent = `វេនថ្ងៃនេះ: ${currentUserShift}`;
 
-  changeView("homeView");
+  changeView("homeView");
 
-  setupAttendanceListener();
-  startLeaveListeners();
-  startSessionListener(employee.id);
+  // --- *** កំណែកែប្រែ *** ---
+  // 1. ត្រូវប្រាកដថាយើងទាញទិន្នន័យច្បាប់ដំបូង (Initial Leave) ជាមុនសិន
+  //    Function នេះនឹងហៅ mergeAndRenderHistory() លើកទីមួយ។
+  await startLeaveListeners();
 
-  if (timeCheckInterval) clearInterval(timeCheckInterval);
-  timeCheckInterval = setInterval(updateButtonState, 30000);
+  // 2. បន្ទាប់មក ចាប់ផ្ដើម Listener សម្រាប់វត្តមាន។
+  //    វានឹងហៅ mergeAndRenderHistory() លើកទីពីរ ដោយមានទិន្នន័យច្បាប់រួចជាស្រេច
+  setupAttendanceListener();
+  startSessionListener(employee.id);
+  // --- *** ចប់កំណែកែប្រែ *** ---
 
-  prepareFaceMatcher(employee.photoUrl);
+  if (timeCheckInterval) clearInterval(timeCheckInterval);
+  timeCheckInterval = setInterval(updateButtonState, 30000);
 
-  employeeListContainer.classList.add("hidden");
-  searchInput.value = "";
+  prepareFaceMatcher(employee.photoUrl);
+
+  employeeListContainer.classList.add("hidden");
+  searchInput.value = "";
 }
 
 function logout() {
@@ -1504,60 +1512,67 @@ function forceLogout(message) {
   customModal.classList.add("modal-visible");
 }
 
-function startLeaveListeners() {
-  if (!dbLeave || !currentUser) return;
+// ស្វែងរក Function ឈ្មោះ "startLeaveListeners"
+async function startLeaveListeners() { // បន្ថែម "async"
+  if (!dbLeave || !currentUser) return;
 
-  if (leaveCollectionListener) leaveCollectionListener();
-  if (outCollectionListener) outCollectionListener();
+  if (leaveCollectionListener) leaveCollectionListener();
+  if (outCollectionListener) outCollectionListener();
 
-  const leaveCollectionPath =
-    "/artifacts/default-app-id/public/data/leave_requests";
-  const outCollectionPath =
-    "/artifacts/default-app-id/public/data/out_requests";
+  const leaveCollectionPath =
+    "/artifacts/default-app-id/public/data/leave_requests";
+  const outCollectionPath =
+    "/artifacts/default-app-id/public/data/out_requests";
 
-  const employeeId = currentUser.id;
+  const employeeId = currentUser.id;
 
-  const reFetchAllLeave = async () => {
-    leaveRecords = await fetchAllLeaveForMonth(employeeId);
-    console.log(`Real-time Leave Updated: ${leaveRecords.length} records.`);
-    await mergeAndRenderHistory();
-  };
+  const reFetchAllLeave = async () => {
+    leaveRecords = await fetchAllLeaveForMonth(employeeId);
+    console.log(`Real-time Leave Updated: ${leaveRecords.length} records.`);
+    await mergeAndRenderHistory();
+  };
 
-  const qLeave = query(
-    collection(dbLeave, leaveCollectionPath),
-    where("userId", "==", employeeId)
-  );
-  leaveCollectionListener = onSnapshot(
-    qLeave,
-    (snapshot) => {
-      console.log("Real-time update from 'leave_requests' detected.");
-      reFetchAllLeave();
-    },
-    (error) => {
-      console.error("Error listening to 'leave_requests':", error);
-      showMessage(
-        "បញ្ហា",
-        "មិនអាចស្តាប់ទិន្នន័យច្បាប់ (Leave) បានទេ។",
-        true
-      );
-    }
-  );
+  // --- *** កំណែកែប្រែ *** ---
+  // 1. ហៅ Function នេះភ្លាមៗ ដើម្បីទាញទិន្នន័យច្បាប់ដំបូង (Initial Fetch)
+  await reFetchAllLeave();
+  // --- *** ចប់កំណែកែប្រែ *** ---
 
-  const qOut = query(
-    collection(dbLeave, outCollectionPath),
-    where("userId", "==", employeeId)
-  );
-  outCollectionListener = onSnapshot(
-    qOut,
-    (snapshot) => {
-      console.log("Real-time update from 'out_requests' detected.");
-      reFetchAllLeave();
-    },
-    (error) => {
-      console.error("Error listening to 'out_requests':", error);
-      showMessage("បញ្ហា", "មិនអាចស្តាប់ទិន្នន័យច្បាប់ (Out) បានទេ។", true);
-    }
-  );
+  // 2. បន្ទាប់មក បង្កើត Listeners សម្រាប់តាមដានការផ្លាស់ប្តូរនាពេលអនាគត
+  const qLeave = query(
+    collection(dbLeave, leaveCollectionPath),
+    where("userId", "==", employeeId)
+  );
+  leaveCollectionListener = onSnapshot(
+    qLeave,
+    (snapshot) => {
+      console.log("Real-time update from 'leave_requests' detected.");
+      reFetchAllLeave();
+    },
+    (error) => {
+      console.error("Error listening to 'leave_requests':", error);
+      showMessage(
+        "បញ្ហា",
+        "មិនអាចស្តាប់ទិន្នន័យច្បាប់ (Leave) បានទេ។",
+        true
+      );
+    }
+  );
+
+  const qOut = query(
+    collection(dbLeave, outCollectionPath),
+    where("userId", "==", employeeId)
+  );
+  outCollectionListener = onSnapshot(
+    qOut,
+    (snapshot) => {
+      console.log("Real-time update from 'out_requests' detected.");
+      reFetchAllLeave();
+    },
+    (error) => {
+      console.error("Error listening to 'out_requests':", error);
+      showMessage("បញ្ហា", "មិនអាចស្តាប់ទិន្នន័យច្បាប់ (Out) បានទេ។", true);
+    }
+  );
 }
 
 // --- *** កែប្រែ: ត្រឡប់ទៅប្រើទិន្នន័យពី querySnapshot ផ្ទាល់ វិញ (FIX) *** ---
