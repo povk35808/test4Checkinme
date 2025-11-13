@@ -1317,6 +1317,7 @@ function renderEmployeeList(employees) {
 
 // ស្វែងរក Function ឈ្មោះ "selectUser"
 // ស្វែងរក Function ឈ្មោះ "selectUser"
+// ស្វែងរក Function ឈ្មោះ "selectUser"
 async function selectUser(employee) {
   console.log("User selected:", employee);
 
@@ -1387,14 +1388,12 @@ async function selectUser(employee) {
     "text-center text-sm text-gray-500 pb-4 px-6 h-5 animate-pulse";
   // --- *** ចប់ *** ---
 
-  // --- *** កំណែកែប្រែ (របស់អ្នក) *** ---
   // 1. ត្រូវប្រាកដថាយើងទាញទិន្នន័យច្បាប់ដំបូង (Initial Leave) ជាមុនសិន
   await startLeaveListeners();
 
   // 2. បន្ទាប់មក ចាប់ផ្ដើម Listener សម្រាប់វត្តមាន។
   setupAttendanceListener();
   startSessionListener(employee.id);
-  // --- *** ចប់កំណែកែប្រែ *** ---
 
   if (timeCheckInterval) clearInterval(timeCheckInterval);
   timeCheckInterval = setInterval(updateButtonState, 30000);
@@ -1404,7 +1403,6 @@ async function selectUser(employee) {
   employeeListContainer.classList.add("hidden");
   searchInput.value = "";
 }
-
 function logout() {
   currentUser = null;
   currentUserShift = null;
@@ -1587,6 +1585,8 @@ async function startLeaveListeners() { // បន្ថែម "async"
 // ស្វែងរក Function ឈ្មោះ "setupAttendanceListener"
 // --- *** កែប្រែ: ត្រឡប់ទៅប្រើទិន្នន័យពី querySnapshot ផ្ទាល់ វិញ (FIX) *** ---
 // --- *** កែប្រែ: ត្រឡប់ទៅប្រើទិន្នន័យពី querySnapshot ផ្ទាល់ វិញ (FIX) *** ---
+// ស្វែងរក Function ឈ្មោះ "setupAttendanceListener"
+// --- *** ថ្មី: ប្រើ QuerySnapshot ដើម្បីដោះស្រាយបញ្ហា Real-time Delete *** ---
 function setupAttendanceListener() {
   if (!attendanceCollectionRef) return;
 
@@ -1594,23 +1594,25 @@ function setupAttendanceListener() {
     attendanceListener(); // បញ្ឈប់ Listener ចាស់
   }
 
-  // (យើងលុបការកំណត់ "Loading" ចេញពីទីនេះ ព្រោះយើងបានធ្វើវានៅក្នុង selectUser ហើយ)
+  // (យើងមិនត្រូវការកំណត់ "Loading" នៅទីនេះទៀតទេ ព្រោះ selectUser បានធ្វើហើយ)
 
   attendanceListener = onSnapshot(
     attendanceCollectionRef,
-    async (querySnapshot) => { // ប្រើ async សម្រាប់ await mergeAndRenderHistory
+    async (querySnapshot) => { 
       console.log(
-        `Real-time update from 'attendance' detected. Docs count: ${querySnapshot.size}`
+        `Real-time update from 'attendance'. Docs count: ${querySnapshot.size}`
       );
       
+      // 1. បង្កើត Array ថ្មីពីទិន្នន័យចុងក្រោយ (Snapshot)
+      // ប្រសិនបើឯកសារណាមួយត្រូវបាន "លុប", វានឹងមិនមាននៅក្នុង querySnapshot នេះទេ
       let allRecords = [];
-      querySnapshot.forEach((doc) => { // ប្រើទិន្នន័យផ្ទាល់ពី snapshot
+      querySnapshot.forEach((doc) => { 
         allRecords.push(doc.data());
       });
 
       const { startOfMonth, endOfMonth } = getCurrentMonthRange();
 
-      // 1. Update the global attendanceRecords ពីទិន្នន័យ Snapshot ផ្ទាល់
+      // 2. Update a global "attendanceRecords" 
       attendanceRecords = allRecords.filter(
         (record) => record.date >= startOfMonth && record.date <= endOfMonth
       );
@@ -1619,8 +1621,8 @@ function setupAttendanceListener() {
         `Real-time Attendance Updated: ${attendanceRecords.length} records.`
       );
 
-      // 2. ហៅ merge and render function
-      // Function នេះនឹងហៅ updateButtonState() ដោយខ្លួនឯង
+      // 3. ហៅ Function តែមួយគត់ ដើម្បី Merge និង Render UI ឡើងវិញ
+      // Function នេះនឹងគូរ UI ពីដើម ដោយផ្អែកលើទិន្នន័យថ្មី (ដែលបានលុបចេញហើយ)
       await mergeAndRenderHistory();
     },
     (error) => {
@@ -1632,7 +1634,6 @@ function setupAttendanceListener() {
     }
   );
 }
-
 
 function renderMonthlyHistory() {
   const container = document.getElementById("monthlyHistoryContainer");
