@@ -727,25 +727,20 @@ async function loadAIModels() {
 
   try {
     await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL, {
-      useDiskCache: true,
+      useDiskCache: true, // <<--- ឃើញទេ?
     });
     await faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL, {
-      useDiskCache: true,
+      useDiskCache: true, // <<--- នៅទីនេះផងដែរ
     });
     await faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL, {
-      useDiskCache: true,
+      useDiskCache: true, // <<--- និងនៅទីនេះ
     });
 
     console.log("AI Models Loaded");
     modelsLoaded = true;
-    await fetchGoogleSheetData();
+    // ...
   } catch (e) {
-    console.error("Error loading AI models", e);
-    showMessage(
-      "បញ្ហាធ្ងន់ធ្ងរ",
-      `មិនអាចទាញយក AI Models បានទេ។ សូមពិនិត្យ Folder 'models' (m តូច)។ Error: ${e.message}`,
-      true
-    );
+    // ...
   }
 }
 
@@ -1193,11 +1188,43 @@ async function setupAuthListener() {
 }
 
 
+// ស្វែងរក Function ឈ្មោះ "fetchGoogleSheetData"
 async function fetchGoogleSheetData() {
   changeView("loadingView");
   loadingText.textContent = "កំពុងទាញបញ្ជីបុគ្គលិក...";
 
+  // --- *** ថ្មី: ប្រើប្រាស់ប្រព័ន្ធ Cache *** ---
+  const CACHE_KEY = "employee_list_cache";
+  
+  // *** កំណែកែប្រែ តាមការស្នើសុំ ***
+  const CACHE_DURATION_MS = 5 * 60 * 1000; // 5 នាទី 
+  // --- *** ចប់កំណែកែប្រែ *** ---
+
   try {
+    const cachedData = await localforage.getItem(CACHE_KEY);
+    let isCacheValid = false;
+
+    if (cachedData && cachedData.data && cachedData.timestamp) {
+      const timeSinceCache = Date.now() - cachedData.timestamp;
+      if (timeSinceCache < CACHE_DURATION_MS) {
+        console.log("Loading employees from CACHE (Valid < 5 mins).");
+        allEmployees = cachedData.data;
+        isCacheValid = true;
+      } else {
+        console.log("Cache expired (> 5 mins). Fetching new data.");
+      }
+    }
+
+    if (isCacheValid) {
+      // ប្រើទិន្នន័យពី Cache ភ្លាមៗ
+      renderEmployeeList(allEmployees);
+      checkSavedLogin(); // ហៅ Function បំបែក (ខាងក្រោម)
+    }
+
+    // បន្តទាញយកទិន្នន័យថ្មីពី GSheet (ទោះបីមាន Cache ក៏ដោយ)
+    // ប្រសិនបើ Cache មិនvalid (isCacheValid === false), វានឹងបង្ហាញ Loading...
+    // ប្រសិនបើ Cache valid (isCacheValid === true), វានឹងទាញយកក្នុងផ្ទៃខាងក្រោយ
+    
     const response = await fetch(GVIZ_URL);
     if (!response.ok) {
       throw new Error(`Network response was not ok (${response.status})`);
@@ -1221,16 +1248,15 @@ async function fetchGoogleSheetData() {
       );
     }
 
-    allEmployees = data.table.rows
+    const freshEmployees = data.table.rows
       .map((row) => {
+        // ... (កូដ map របស់អ្នកទុកដដែល)
         const cells = row.c;
         const id = cells[COL_INDEX.ID]?.v;
         if (!id) {
           return null;
         }
-
         const photoLink = cells[COL_INDEX.PHOTO]?.v || null;
-
         return {
           id: String(id).trim(),
           name: cells[COL_INDEX.NAME]?.v || "N/A",
@@ -1252,33 +1278,52 @@ async function fetchGoogleSheetData() {
       .filter((emp) => emp.group !== "ការងារក្រៅ")
       .filter((emp) => emp.group !== "បុគ្គលិក");
 
-    console.log(`Loaded ${allEmployees.length} employees (Filtered).`);
-    renderEmployeeList(allEmployees);
+    console.log(`Loaded ${freshEmployees.length} employees from GSheet.`);
+    
+    // រក្សាទុកទិន្នន័យថ្មីទៅ Cache
+    await localforage.setItem(CACHE_KEY, {
+      data: freshEmployees,
+      timestamp: Date.now(),
+    });
 
-    const savedEmployeeId = localStorage.getItem("savedEmployeeId");
-    if (savedEmployeeId) {
-      const savedEmployee = allEmployees.find(
-        (emp) => emp.id === savedEmployeeId
-      );
-      if (savedEmployee) {
-        console.log("Logging in with saved user:", savedEmployee.name);
-        selectUser(savedEmployee);
-      } else {
-        console.log("Saved user ID not found in list. Clearing storage.");
-        localStorage.removeItem("savedEmployeeId");
-        localStorage.removeItem("currentDeviceId");
-        changeView("employeeListView");
-      }
-    } else {
-      changeView("employeeListView");
+    // ប្រសិនបើ Cache មិន valid (isCacheValid === false)
+    // យើងត្រូវ Update UI ជាមួយទិន្នន័យថ្មី
+    if (!isCacheValid) {
+      allEmployees = freshEmployees;
+      renderEmployeeList(allEmployees);
+      checkSavedLogin(); // ហៅ Function បំបែក
     }
+
   } catch (error) {
+    // ... (កូដ catch error របស់អ្នកទុកដដែល)
     console.error("Fetch Google Sheet Error:", error);
     showMessage(
       "បញ្ហាទាញទិន្នន័យ",
       `មិនអាចទាញទិន្នន័យពី Google Sheet បានទេ។ សូមប្រាកដថា Sheet ត្រូវបាន Publish to the web។ Error: ${error.message}`,
       true
     );
+  }
+}
+
+// --- *** កុំភ្លេច Function បំបែកនេះ *** ---
+// (Function នេះមិនផ្លាស់ប្តូរទេ តែត្រូវប្រាកដថាវាមាន)
+function checkSavedLogin() {
+  const savedEmployeeId = localStorage.getItem("savedEmployeeId");
+  if (savedEmployeeId) {
+    const savedEmployee = allEmployees.find(
+      (emp) => emp.id === savedEmployeeId
+    );
+    if (savedEmployee) {
+      console.log("Logging in with saved user:", savedEmployee.name);
+      selectUser(savedEmployee);
+    } else {
+      console.log("Saved user ID not found in list. Clearing storage.");
+      localStorage.removeItem("savedEmployeeId");
+      localStorage.removeItem("currentDeviceId");
+      changeView("employeeListView");
+    }
+  } else {
+    changeView("employeeListView");
   }
 }
 
@@ -1519,66 +1564,59 @@ function forceLogout(message) {
 }
 
 // ស្វែងរក Function ឈ្មោះ "startLeaveListeners"
-async function startLeaveListeners() { // បន្ថែម "async"
-  if (!dbLeave || !currentUser) return;
+// ស្វែងរក Function ឈ្មោះ "startLeaveListeners"
+async function startLeaveListeners() {
+  if (!dbLeave || !currentUser) return;
 
-  if (leaveCollectionListener) leaveCollectionListener();
-  if (outCollectionListener) outCollectionListener();
+  if (leaveCollectionListener) leaveCollectionListener();
+  if (outCollectionListener) outCollectionListener();
 
-  const leaveCollectionPath =
-    "/artifacts/default-app-id/public/data/leave_requests";
-  const outCollectionPath =
-    "/artifacts/default-app-id/public/data/out_requests";
+  const leaveCollectionPath =
+    "/artifacts/default-app-id/public/data/leave_requests";
+  const outCollectionPath =
+    "/artifacts/default-app-id/public/data/out_requests";
 
-  const employeeId = currentUser.id;
+  const employeeId = currentUser.id;
 
-  const reFetchAllLeave = async () => {
-    leaveRecords = await fetchAllLeaveForMonth(employeeId);
-    console.log(`Real-time Leave Updated: ${leaveRecords.length} records.`);
-    await mergeAndRenderHistory();
-  };
+  const reFetchAllLeave = async () => {
+    leaveRecords = await fetchAllLeaveForMonth(employeeId);
+    console.log(`Real-time Leave Updated: ${leaveRecords.length} records.`);
+    await mergeAndRenderHistory();
+  };
 
-  // --- *** កំណែកែប្រែ *** ---
-  // 1. ហៅ Function នេះភ្លាមៗ ដើម្បីទាញទិន្នន័យច្បាប់ដំបូង (Initial Fetch)
-  await reFetchAllLeave();
-  // --- *** ចប់កំណែកែប្រែ *** ---
+  // --- *** កំណែកែប្រែ *** ---
+  // 1. ដក "await reFetchAllLeave();" ចេញពីទីនេះ។
+  // onSnapshot ខាងក្រោម នឹង trigger ម្ដងជាមិនខាននៅពេលដំបូង
+  // ធ្វើបែបនេះ យើងមិនចាំបាច់ getDocs ពីរដងទេ។
+  // await reFetchAllLeave(); // << ដកបន្ទាត់នេះចេញ
+  // --- *** ចប់កំណែកែប្រែ *** ---
 
-  // 2. បន្ទាប់មក បង្កើត Listeners សម្រាប់តាមដានការផ្លាស់ប្តូរនាពេលអនាគត
-  const qLeave = query(
-    collection(dbLeave, leaveCollectionPath),
-    where("userId", "==", employeeId)
-  );
-  leaveCollectionListener = onSnapshot(
-    qLeave,
-    (snapshot) => {
-      console.log("Real-time update from 'leave_requests' detected.");
-      reFetchAllLeave();
-    },
-    (error) => {
-      console.error("Error listening to 'leave_requests':", error);
-      showMessage(
-        "បញ្ហា",
-        "មិនអាចស្តាប់ទិន្នន័យច្បាប់ (Leave) បានទេ។",
-        true
-      );
-    }
-  );
+  // 2. បន្ទាប់មក បង្កើត Listeners សម្រាប់តាមដានការផ្លាស់ប្តូរនាពេលអនាគត
+  const qLeave = query(
+    collection(dbLeave, leaveCollectionPath),
+    where("userId", "==", employeeId)
+  );
+  leaveCollectionListener = onSnapshot(
+    qLeave,
+    (snapshot) => {
+      console.log("Real-time update from 'leave_requests' detected.");
+      reFetchAllLeave();
+    },
+    // ... (កូដ error ទុកដដែល)
+  );
 
-  const qOut = query(
-    collection(dbLeave, outCollectionPath),
-    where("userId", "==", employeeId)
-  );
-  outCollectionListener = onSnapshot(
-    qOut,
-    (snapshot) => {
-      console.log("Real-time update from 'out_requests' detected.");
-      reFetchAllLeave();
-    },
-    (error) => {
-      console.error("Error listening to 'out_requests':", error);
-      showMessage("បញ្ហា", "មិនអាចស្តាប់ទិន្នន័យច្បាប់ (Out) បានទេ។", true);
-    }
-  );
+  const qOut = query(
+    collection(dbLeave, outCollectionPath),
+    where("userId", "==", employeeId)
+  );
+  outCollectionListener = onSnapshot(
+    qOut,
+    (snapshot) => {
+      console.log("Real-time update from 'out_requests' detected.");
+      reFetchAllLeave();
+    },
+    // ... (កូដ error ទុកដដែល)
+  );
 }
 
 // --- *** កែប្រែ: ត្រឡប់ទៅប្រើទិន្នន័យពី querySnapshot ផ្ទាល់ វិញ (FIX) *** ---
@@ -1587,6 +1625,7 @@ async function startLeaveListeners() { // បន្ថែម "async"
 // --- *** កែប្រែ: ត្រឡប់ទៅប្រើទិន្នន័យពី querySnapshot ផ្ទាល់ វិញ (FIX) *** ---
 // ស្វែងរក Function ឈ្មោះ "setupAttendanceListener"
 // --- *** ថ្មី: ប្រើ QuerySnapshot ដើម្បីដោះស្រាយបញ្ហា Real-time Delete *** ---
+// ស្វែងរក Function ឈ្មោះ "setupAttendanceListener"
 function setupAttendanceListener() {
   if (!attendanceCollectionRef) return;
 
@@ -1594,25 +1633,33 @@ function setupAttendanceListener() {
     attendanceListener(); // បញ្ឈប់ Listener ចាស់
   }
 
-  // (យើងមិនត្រូវការកំណត់ "Loading" នៅទីនេះទៀតទេ ព្រោះ selectUser បានធ្វើហើយ)
+  // --- *** ថ្មី: បង្កើត Query ដើម្បីត្រងទិន្នន័យ *** ---
+  const { startOfMonth } = getCurrentMonthRange();
+  console.log(`Setting up listener for records on or after: ${startOfMonth}`);
+
+  const q = query(
+    attendanceCollectionRef,
+    where("date", ">=", startOfMonth)
+  );
+  // --- *** ចប់ *** ---
+
+  // (កូដ "Loading" របស់អ្នក (ដែលខ្ញុំបានបន្ថែម) គឺនៅក្នុង "selectUser" រួចហើយ)
 
   attendanceListener = onSnapshot(
-    attendanceCollectionRef,
-    async (querySnapshot) => { 
+    q, // << ប្រើ "q" (Query) ជំនួស "attendanceCollectionRef"
+    async (querySnapshot) => {
       console.log(
         `Real-time update from 'attendance'. Docs count: ${querySnapshot.size}`
       );
-      
-      // 1. បង្កើត Array ថ្មីពីទិន្នន័យចុងក្រោយ (Snapshot)
-      // ប្រសិនបើឯកសារណាមួយត្រូវបាន "លុប", វានឹងមិនមាននៅក្នុង querySnapshot នេះទេ
+
       let allRecords = [];
-      querySnapshot.forEach((doc) => { 
+      querySnapshot.forEach((doc) => {
         allRecords.push(doc.data());
       });
 
       const { startOfMonth, endOfMonth } = getCurrentMonthRange();
 
-      // 2. Update a global "attendanceRecords" 
+      // ឥឡូវ attendanceRecords នឹងមានទិន្នន័យតិចជាងមុន
       attendanceRecords = allRecords.filter(
         (record) => record.date >= startOfMonth && record.date <= endOfMonth
       );
@@ -1621,16 +1668,10 @@ function setupAttendanceListener() {
         `Real-time Attendance Updated: ${attendanceRecords.length} records.`
       );
 
-      // 3. ហៅ Function តែមួយគត់ ដើម្បី Merge និង Render UI ឡើងវិញ
-      // Function នេះនឹងគូរ UI ពីដើម ដោយផ្អែកលើទិន្នន័យថ្មី (ដែលបានលុបចេញហើយ)
       await mergeAndRenderHistory();
     },
     (error) => {
-      console.error("Error listening to attendance:", error);
-      showMessage("បញ្ហា", "មិនអាចស្តាប់ទិន្នន័យវត្តមានបានទេ។", true);
-      attendanceStatus.textContent = "Error";
-      attendanceStatus.className =
-        "text-center text-sm text-red-500 pb-4 px-6 h-5";
+      // ... (កូដ error ទុកដដែល)
     }
   );
 }
