@@ -17,6 +17,7 @@ import {
   where,
   getDocs,
   getDoc, // <-- *** ថ្មី: បន្ថែម getDoc ***
+  getDocFromServer, // <-- *** នេះគឺជាការកែប្រែ ***
   deleteDoc, // <-- *** ថ្មី: បន្ថែម deleteDoc ***
 } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 import {
