@@ -742,12 +742,9 @@ async function mergeAndRenderHistory() {
 // --- AI & Camera Functions ---
 
 // ស្វែងរក Function ឈ្មោះ "loadAIModels"
+// ស្វែងរក Function ឈ្មោះ "loadAIModels" ហើយជំនួសវា
 async function loadAIModels() {
   const MODEL_URL = "./models";
-  
-  // --- *** កំណែកែប្រែ *** ---
-  // loadingText.textContent = "កំពុងទាញយក AI Models..."; // << ដកចេញ ព្រោះវារត់ក្នុង Background
-  // --- *** ចប់ *** ---
 
   try {
     await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL, {
@@ -763,15 +760,27 @@ async function loadAIModels() {
     console.log("AI Models Loaded");
     modelsLoaded = true;
 
-    // --- *** នេះគឺជាការកែប្រែដ៏សំខាន់បំផុត *** ---
-    // await fetchGoogleSheetData(); // <<--- លុបបន្ទាត់នេះចេញ! (នេះជាអ្នកបង្ក Loop)
+    // --- *** ថ្មី: ហៅ Update Button ភ្លាមៗ *** ---
+    // បន្ទាប់ពី Models ផ្ទុករួច, យើងត្រូវ Update ប៊ូតុង
+    // ដើម្បីឱ្យវាអាច Enabled (បើក) វិញ
+    if (currentUser) { // (ពិនិត្យcurrentUser ឱ្យប្រាកដ)
+      await updateButtonState();
+    }
     // --- *** ចប់ *** ---
 
   } catch (e) {
     console.error("Error loading AI models", e);
-    // យើងមិនបង្ហាញ Message ទេ ព្រោះ User មិនឃើញវា
+    // បង្ហាញ Error ធ្ងន់ធ្ងរ ប្រសិនបើ Models ផ្ទុកមិនបាន
+    showMessage(
+      "បញ្ហា AI Model",
+      `មិនអាចផ្ទុក AI Models បានទេ (${e.message})។ សូម Refresh ទំព័រ។`,
+      true
+    );
   }
 }
+
+
+
 
 async function prepareFaceMatcher(imageUrl) {
   currentUserFaceMatcher = null;
@@ -1618,13 +1627,13 @@ function clearLocalSession() {
     outCollectionListener = null;
   }
 
-  // បញ្ឈប់ Timer
+  // បញ្ឈប់ Timer (សំខាន់!)
   if (timeCheckInterval) {
     clearInterval(timeCheckInterval);
     timeCheckInterval = null;
   }
 
-  // សម្អាតទិន្នន័យ User (សំខាន់បំផុត)
+  // សម្អាតទិន្នន័យ User (សំខាន់!)
   currentUser = null;
   currentUserShift = null;
   currentUserFaceMatcher = null;
@@ -1638,7 +1647,7 @@ function clearLocalSession() {
   attendanceRecords = [];
   leaveRecords = [];
 
-  // សម្អាត UI (តែមិនប្តូរ View)
+  // សម្អាត UI
   if (historyContainer) {
     historyContainer.innerHTML = "";
     if (noHistoryRow) {
@@ -1666,11 +1675,10 @@ function clearLocalSession() {
 // ស្វែងរក Function ឈ្មោះ "logout"
 async function logout() { 
   
-  // ធ្វើការងារ Firestore ជាមុន
+  // ធ្វើការងារ Firestore ជាមុន (Update ទៅ "Free")
   if (currentUser && sessionCollectionRef) {
     try {
       const sessionDocRef = doc(sessionCollectionRef, currentUser.id);
-      // កំណត់ Status ក្នុង Firebase ទៅ "Free"
       await updateDoc(sessionDocRef, { 
         status: "Free",
       });
@@ -1762,10 +1770,8 @@ function startVisibilityListener(employeeId) {
 // ស្វែងរក Function ឈ្មោះ "forceLogout"
 function forceLogout(message) {
   
-  // --- *** កំណែកែប្រែ *** ---
-  // ហៅ Function សម្អាតថ្មី (វាមិន update Firestore និង លឿន)
+  // ហៅ Function សម្អាត (លឿន) ភ្លាមៗ
   clearLocalSession();
-  // --- *** ចប់ *** ---
 
   modalTitle.textContent = "បានចាកចេញដោយស្វ័យប្រវត្តិ";
   modalMessage.textContent = message;
@@ -2110,7 +2116,16 @@ function renderTodayHistory() {
   container.appendChild(card);
 }
 
+// ស្វែងរក Function ឈ្មោះ "updateButtonState" ហើយជំនួសវា
+// ស្វែងរក Function ឈ្មោះ "updateButtonState" ហើយជំនួសវា
 async function updateButtonState() {
+  
+  // (Guard Clause ពីមុន ទុកដដែល)
+  if (!currentUser) {
+    console.warn("updateButtonState skipped: User is null (logging out).");
+    return;
+  }
+
   const todayString = getTodayDateString();
   const todayData = currentMonthRecords.find(
     (record) => record.date === todayString
@@ -2131,9 +2146,11 @@ async function updateButtonState() {
   let statusMessage = "សូមធ្វើការ Check-in";
   let statusClass = "text-blue-700";
 
+  // (Logic ពិនិត្យវត្តមាន/ច្បាប់ ទុកដដែល)
   if (todayData && todayData.checkIn) {
     checkInDisabled = true;
     if (todayData.checkIn.includes("(មកយឺត)")) {
+      // ... (កូដ statusMessage ទុកដដែល)
       statusMessage = `បាន Check-in ម៉ោង: ${todayData.checkIn}`;
       statusClass = "text-red-700";
     } else if (isShortData(`<span class="${statusClass}">${todayData.checkIn}</span>`)) {
@@ -2153,13 +2170,11 @@ async function updateButtonState() {
     statusClass = "text-yellow-600";
   }
 
-  checkInButton.disabled = checkInDisabled;
-
+  // (Logic ពិនិត្យ checkOutDisabled ទុកដដែល)
   let checkOutDisabled = true;
-
   if (todayData && todayData.checkIn && !todayData.checkOut) {
     checkOutDisabled = false;
-
+    // ... (កូដ leaveBlockOut/canCheckOut ទុកដដែល)
     if (leaveBlockOut) {
       checkOutDisabled = true;
       statusMessage = `អ្នកបានសុំច្បាប់៖ ${leaveBlockOut.reason}`;
@@ -2169,21 +2184,21 @@ async function updateButtonState() {
       statusMessage = `ក្រៅម៉ោង Check-out (${currentUserShift})`;
       statusClass = "text-yellow-600";
     }
-    
+    // ... (កូដ statusMessage ពេល checkIn ទុកដដែល)
     if (isShortData(`<span class="${statusClass}">${todayData.checkIn}</span>`)) {
         if (checkOutDisabled) {
           // Keep the 'leave' or 'outside shift' message
         } else if (todayData.checkIn.includes("(មកយឺត)")) {
-            statusMessage = `បាន Check-in ម៉ោង: ${todayData.checkIn}`;
-            statusClass = "text-red-700";
+          statusMessage = `បាន Check-in ម៉ោង: ${todayData.checkIn}`;
+          statusClass = "text-red-700";
         } else {
           statusMessage = `បាន Check-in ម៉ោង: ${todayData.checkIn}`;
           statusClass = "text-green-700";
         }
     }
-
   } else if (todayData && todayData.checkOut) {
     checkOutDisabled = true;
+    // ... (កូដ statusMessage ពេល checkOut ទុកដដែល)
     if (isShortData(`<span class="${statusClass}">${todayData.checkOut}</span>`)) {
       statusMessage = `បាន Check-out ម៉ោង: ${todayData.checkOut}`;
       statusClass = "text-red-700";
@@ -2192,7 +2207,22 @@ async function updateButtonState() {
       statusClass = "text-blue-700";
     }
   }
+
+  // --- *** ថ្មី: បន្ថែមការពិនិត្យ AI Models *** ---
+  // (នេះគឺជាការកែប្រែដ៏សំខាន់)
+  if (!modelsLoaded) {
+    checkInDisabled = true;
+    checkOutDisabled = true;
+    
+    // ប្តូរសារ ប្រសិនបើមិនមាន Error ផ្សេង
+    if (statusMessage === "សូមធ្វើការ Check-in") {
+       statusMessage = "កំពុងផ្ទុក AI Models... សូមរង់ចាំ";
+       statusClass = "text-yellow-600 animate-pulse";
+    }
+  }
+  // --- *** ចប់ *** ---
   
+  checkInButton.disabled = checkInDisabled;
   checkOutButton.disabled = checkOutDisabled;
 
   attendanceStatus.textContent = statusMessage;
