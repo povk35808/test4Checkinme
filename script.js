@@ -1586,6 +1586,8 @@ async function logout() { // --- ថ្មី: បន្ថែម async ---
 
 // ស្វែងរក Function ឈ្មោះ "startSessionListener"
 // ស្វែងរក Function ឈ្មោះ "startSessionListener"
+// ស្វែងរក Function ឈ្មោះ "startSessionListener"
+// *** កំណែកែប្រែពេញលេញ (FIXED SYNTAX) ***
 function startSessionListener(employeeId) {
   if (sessionListener) {
     sessionListener();
@@ -1604,32 +1606,31 @@ function startSessionListener(employeeId) {
 
       const sessionData = docSnap.data();
 
-      // --- *** កំណែកែប្រែទី 1: ពិនិត្យ Status "Block" *** ---
+      // --- នេះគឺជាខ្សែសង្វាក់ Logic ត្រឹមត្រូវ ---
+
+      // 1. ពិនិត្យ Status "Block"
       if (sessionData.status === "Block") {
         console.warn("Session is BLOCKED by admin. Logging out.");
         forceLogout("គណនីនេះត្រូវបាន Block ពី Admin។");
-        return; // ចេញពី Function ភ្លាម
+        return;
       }
-      // --- *** ចប់ *** ---
-      
-      // --- *** កំណែកែប្រែទី 2 (ថ្មី): ពិនិត្យ Status "Free" *** ---
+      // 2. (ថ្មី) ពិនិត្យ Status "Free"
       else if (sessionData.status === "Free") {
         console.warn("Session is set to FREE. Logging out.");
         forceLogout("គណនីនេះត្រូវបានដោះលែងពីឧបករណ៍នេះ។");
         return;
       }
-      // --- *** ចប់ *** ---
+      // 3. ពិនិត្យ Device ID (ប្រសិនបើ Status គឺ "Active")
+      else {
+        const firestoreDeviceId = sessionData.deviceId;
+        const localDeviceId = localStorage.getItem("currentDeviceId");
 
-      // (ពិនិត្យ Device ID ដូចដើម សម្រាប់ការ Login ឧបករណ៍ផ្សេង)
-      const firestoreDeviceId = sessionData.deviceId;
-      const localDeviceId = localStorage.getItem("currentDeviceId");
-
-      // --- *** កំណែកែប្រែទី 3: ប្រើ "else if" *** ---
-      else if (localDeviceId && firestoreDeviceId !== localDeviceId) {
-        console.warn("Session conflict detected. Logging out.");
-        forceLogout("Session របស់អ្នកត្រូវបានរំខាន (ឧបករណ៍ផ្សេង)។");
+        if (localDeviceId && firestoreDeviceId !== localDeviceId) {
+          console.warn("Session conflict detected. Logging out.");
+          forceLogout("Session របស់អ្នកត្រូវបានរំខាន (ឧបករណ៍ផ្សេង)។");
+        }
       }
-      // --- *** ចប់ *** ---
+      // --- ចប់ខ្សែសង្វាក់ Logic ---
     },
     (error) => {
       console.error("Error in session listener:", error);
