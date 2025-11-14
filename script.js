@@ -747,9 +747,10 @@ async function mergeAndRenderHistory() {
 // ស្វែងរក Function ឈ្មោះ "loadAIModels" ហើយជំនួសវា
 // ស្វែងរក Function ឈ្មោះ "loadAIModels" ហើយជំនួសវា
 // ស្វែងរក Function ឈ្មោះ "loadAIModels" ហើយជំនួសវា
+// ស្វែងរក Function ឈ្មោះ "loadAIModels" ហើយជំនួសវា
 async function loadAIModels() {
-  // --- *** ថ្មី: ប្រើ "./models" ត្រឡប់មកវិញ *** ---
-  const MODEL_URL = "./models"; 
+  // --- *** ថ្មី: ប្រើ CDN URL ជំនួស Folder "models" *** ---
+  const MODEL_URL = "https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/models";
   // --- *** ចប់ *** ---
 
   loadingText.textContent = "កំពុងទាញយក AI Models...";
@@ -766,14 +767,14 @@ async function loadAIModels() {
       useDiskCache: true,
     });
 
-    console.log("AI Models Loaded (from ./models)");
+    console.log("AI Models Loaded (from CDN)");
     modelsLoaded = true;
 
   } catch (e) {
     console.error("Error loading AI models", e);
     showMessage(
       "បញ្ហា AI Model",
-      `មិនអាចផ្ទុក AI Models ពី './models' បានទេ (${e.message})។ សូមប្រាកដថា Folder 'models' មានទីតាំងត្រឹមត្រូវ។`,
+      `មិនអាចផ្ទុក AI Models ពី CDN បានទេ (${e.message})។ សូមពិនិត្យ Internet។`,
       true
     );
     throw e; // បោះ Error ដើម្បីបញ្ឈប់ការ Login
@@ -1116,6 +1117,7 @@ async function handleCaptureAndAnalyze() {
 // ស្វែងរក Function ឈ្មោះ "initializeAppFirebase" ហើយជំនួសវា
 // ស្វែងរក Function ឈ្មោះ "initializeAppFirebase" ហើយជំនួសវា
 // ស្វែងរក Function ឈ្មោះ "initializeAppFirebase" ហើយជំនួសវា
+// ស្វែងរក Function ឈ្មោះ "initializeAppFirebase" ហើយជំនួសវា
 async function initializeAppFirebase() {
   try {
     const attendanceApp = initializeApp(firebaseConfigAttendance);
@@ -1131,24 +1133,20 @@ async function initializeAppFirebase() {
     console.log("Firebase Apps Initialized.");
     setLogLevel("debug");
     
-    // 1. រង់ចាំ Auth និង Time Sync
+    // 1. រង់ចាំ Auth និង Time Sync ឱ្យរួចរាល់សិន
     await setupAuthListener(); 
     
-    console.log("Auth is ready. Starting data fetch...");
-    
-    // 2. ទាញ GSheet
-    await fetchGoogleSheetData(); 
-    
-    // 3. ផ្ទុក AI Models (បន្ទាប់ពី GSheet)
-    await loadAIModels();
-    
-    // 4. ពិនិត្យ Login (ចុងក្រោយ)
-    checkSavedLogin();
+    // 2. បន្ទាប់ពី Auth រួចរាល់, ទើបចាប់ផ្ដើមទាញទិន្នន័យ
+    console.log("Auth is ready. Starting main app logic (fetch/load)...");
+    await fetchGoogleSheetData(); // នេះនឹងទាញបញ្ជីឈ្មោះ + AI Models
 
   } catch (error) {
-    // (Catch Block នេះ នឹងចាប់ Error ពី GSheet ឬ AI Models)
-    console.error("Main Initialization Error:", error);
-    // (showMessage ត្រូវបានហៅរួចហើយ នៅក្នុង Function ខាងក្នុង)
+    console.error("Firebase Init Error:", error);
+    showMessage(
+      "បញ្ហាធ្ងន់ធ្ងរ",
+      `មិនអាចភ្ជាប់ទៅ Firebase បានទេ: ${error.message}`,
+      true
+    );
   }
 }
 
@@ -1208,6 +1206,7 @@ function fetchCheckInLateRules() {
 // ស្វែងរក Function ឈ្មោះ "setupAuthListener" ហើយជំនួសវា
 // ស្វែងរក Function ឈ្មោះ "setupAuthListener" ហើយជំនួសវា
 // ស្វែងរក Function ឈ្មោះ "setupAuthListener" ហើយជំនួសវា
+// ស្វែងរក Function ឈ្មោះ "setupAuthListener" ហើយជំនួសវា
 async function setupAuthListener() {
   return new Promise((resolve, reject) => { // ត្រូវតែ Return Promise
     onAuthStateChanged(authAttendance, async (user) => {
@@ -1239,6 +1238,7 @@ async function setupAuthListener() {
 // ស្វែងរក Function ឈ្មោះ "fetchGoogleSheetData" ហើយជំនួសវា
 // ស្វែងរក Function ឈ្មោះ "fetchGoogleSheetData" ហើយជំនួសវា
 // ស្វែងរក Function ឈ្មោះ "fetchGoogleSheetData" ហើយជំនួសវា
+// ស្វែងរក Function ឈ្មោះ "fetchGoogleSheetData" ហើយជំនួសវា
 async function fetchGoogleSheetData() {
   changeView("loadingView");
   loadingText.textContent = "កំពុងទាញបញ្ជីបុគ្គលិក...";
@@ -1247,9 +1247,9 @@ async function fetchGoogleSheetData() {
   const CACHE_DURATION_MS = 5 * 60 * 1000; // 5 នាទី
 
   try {
-    // (កូដ Cache ទុកដដែល)
     const cachedData = await localforage.getItem(CACHE_KEY);
     let isCacheValid = false;
+
     if (cachedData && cachedData.data && cachedData.timestamp) {
       const timeSinceCache = Date.now() - cachedData.timestamp;
       if (timeSinceCache < CACHE_DURATION_MS) {
@@ -1260,16 +1260,18 @@ async function fetchGoogleSheetData() {
         console.log("Cache expired (> 5 mins). Fetching new data.");
       }
     }
+
     if (isCacheValid) {
       renderEmployeeList(allEmployees);
     }
     
-    // (កូដទាញ GSheet ទុកដដែល)
     const response = await fetch(GVIZ_URL);
     if (!response.ok) throw new Error(`Network response was not ok (${response.status})`);
+    
     let text = await response.text();
     const jsonText = text.match(/google\.visualization\.Query\.setResponse\((.*)\);/s);
     if (!jsonText || !jsonText[1]) throw new Error("Invalid Gviz response format.");
+    
     const data = JSON.parse(jsonText[1]);
     if (data.status === "error") {
       throw new Error(`Google Sheet Error: ${data.errors.map((e) => e.detailed_message).join(", ")}`);
@@ -1277,7 +1279,6 @@ async function fetchGoogleSheetData() {
 
     const freshEmployees = data.table.rows
       .map((row) => {
-        // ... (កូដ map របស់អ្នកទុកដដែល)
         const cells = row.c;
         const id = cells[COL_INDEX.ID]?.v;
         if (!id) {
@@ -1317,18 +1318,20 @@ async function fetchGoogleSheetData() {
       renderEmployeeList(allEmployees);
     }
     
-    // --- *** ថ្មី: ដក loadAIModels() និង checkSavedLogin() ចេញពីទីនេះ *** ---
+    // --- *** ថ្មី: ផ្ទុក AI Models បន្ទាប់ពីទាញ GSheet រួច *** ---
+    await loadAIModels(); // ហៅ Function ថ្មី (CDN)
+    // --- *** ចប់ *** ---
     
+    // ឥឡូវទើបយើងអាច Login
+    checkSavedLogin();
+
   } catch (error) {
-    // --- *** ថ្មី: Catch Block នេះ ឥឡូវគ្រប់គ្រងតែ GSheet Error *** ---
     console.error("Fetch Google Sheet Error:", error);
     showMessage(
       "បញ្ហាទាញទិន្នន័យ",
       `មិនអាចទាញទិន្នន័យពី Google Sheet បានទេ។ Error: ${error.message}`,
       true
     );
-    throw error; // បោះ Error ដើម្បីបញ្ឈប់ការបន្ត
-    // --- *** ចប់ *** ---
   }
 }
 
@@ -1396,6 +1399,7 @@ function renderEmployeeList(employees) {
 // ស្វែងរក Function ឈ្មោះ "selectUser"
 // ស្វែងរក Function ឈ្មោះ "selectUser"
 // ស្វែងរក Function ឈ្មោះ "selectUser" ហើយជំនួសវាទាំងមូល
+// ស្វែងរក Function ឈ្មោះ "selectUser" ហើយជំនួសវា
 // ស្វែងរក Function ឈ្មោះ "selectUser" ហើយជំនួសវា
 // ស្វែងរក Function ឈ្មោះ "selectUser" ហើយជំនួសវា
 async function selectUser(employee) {
