@@ -1385,119 +1385,127 @@ function renderEmployeeList(employees) {
 // ស្វែងរក Function ឈ្មោះ "selectUser"
 // ស្វែងរក Function ឈ្មោះ "selectUser"
 // ស្វែងរក Function ឈ្មោះ "selectUser"
+// ស្វែងរក Function ឈ្មោះ "selectUser"
 async function selectUser(employee) {
-  console.log("User selected:", employee);
+  console.log("User selected:", employee);
 
-  // --- *** ពិនិត្យ Session Lock (កូដពីមុន) *** ---
-  const sessionDocRef = doc(sessionCollectionRef, employee.id);
-  try {
-    const docSnap = await getDoc(sessionDocRef);
-    
-    if (docSnap.exists()) {
-      const sessionData = docSnap.data();
-      const sessionTimestamp = new Date(sessionData.timestamp).getTime();
-      const sessionAge = getSyncedTime().getTime() - sessionTimestamp;
+  // --- *** ពិនិត្យ Session Lock (កូដពីមុន) *** ---
+  const sessionDocRef = doc(sessionCollectionRef, employee.id);
+  try {
+    const docSnap = await getDoc(sessionDocRef);
+    
+    if (docSnap.exists()) {
+      const sessionData = docSnap.data();
+      const sessionTimestamp = new Date(sessionData.timestamp).getTime();
+      const sessionAge = getSyncedTime().getTime() - sessionTimestamp;
 
-      if (sessionAge < SESSION_TIMEOUT_MS) {
-        console.warn("Login BLOCKED. Session is active on another device.");
-        showMessage(
-          "មិនអាចចូលប្រើបាន",
-          `គណនីនេះ (${employee.name}) កំពុងត្រូវបានប្រើនៅលើឧបករណ៍ផ្សេង។ សូមធ្វើការ Logout ចេញពីឧបករណ៍នោះជាមុនសិន។`,
-          true
-        );
-        return; 
-      } else {
-        console.log("Stale session detected (> 24h). Overwriting...");
-      }
-    }
-  } catch (e) {
-    console.error("Failed to check session doc:", e);
-    showMessage("បញ្ហា Session", `មិនអាចពិនិត្យ Session Lock បានទេ៖ ${e.message}`, true);
-    return;
-  }
-  // --- *** ចប់ការពិនិត្យ *** ---
+      if (sessionAge < SESSION_TIMEOUT_MS) {
+        console.warn("Login BLOCKED. Session is active on another device.");
+        showMessage(
+          "មិនអាចចូលប្រើបាន",
+          `គណនីនេះ (${employee.name}) កំពុងត្រូវបានប្រើនៅលើឧបករណ៍ផ្សេង។ សូមធ្វើការ Logout ចេញពីឧបករណ៍នោះជាមុនសិន។`,
+          true
+        );
+        return; 
+      } else {
+        console.log("Stale session detected (> 24h). Overwriting...");
+      }
+    }
+  } catch (e) {
+    console.error("Failed to check session doc:", e);
+    showMessage("បញ្ហា Session", `មិនអាចពិនិត្យ Session Lock បានទេ៖ ${e.message}`, true);
+    return;
+  }
+  // --- *** ចប់ការពិនិត្យ *** ---
 
 
-  // បើមកដល់ចំណុចនេះ = អនុញ្ញាតឱ្យ Login
-  currentDeviceId = self.crypto.randomUUID();
-  localStorage.setItem("currentDeviceId", currentDeviceId);
+  // បើមកដល់ចំណុចនេះ = អនុញ្ញាតឱ្យ Login
+  currentDeviceId = self.crypto.randomUUID();
+  localStorage.setItem("currentDeviceId", currentDeviceId);
 
-  try {
-    // --- *** នេះជាកន្លែងកែប្រែ *** ---
-    await setDoc(sessionDocRef, { 
-      deviceId: currentDeviceId,
-      timestamp: getSyncedTime().toISOString(),
-      employeeName: employee.name,
-      status: "Active", // <-- *** ថ្មី: បន្ថែម Status ***
-    });
-    // --- *** ចប់ *** ---
-    console.log(
-      `Session lock set for ${employee.id} with deviceId ${currentDeviceId}`
-    );
-  } catch (e) {
-    console.error("Failed to set session lock:", e);
-    showMessage(
-      "បញ្ហា Session",
-      `មិនអាចកំណត់ Session Lock បានទេ៖ ${e.message}`,
-      true
-    );
-    return;
-  }
+  try {
+    // --- *** នេះជាកន្លែងកែប្រែ *** ---
+    // --- *** កំណែកែប្រែ តាមការស្នើសុំ *** ---
+    await setDoc(sessionDocRef, { 
+      deviceId: currentDeviceId,
+      timestamp: getSyncedTime().toISOString(),
+      status: "Active",
 
-  // ... (កូដខាងក្រោមទាំងអស់ក្នុង selectUser ទុកដដែល)
-  currentUser = employee;
-  localStorage.setItem("savedEmployeeId", employee.id);
+      // បន្ថែម Fields តាមការស្នើសុំ
+      employeeId: employee.id,
+      employeeName: employee.name,
+      photoUrl: employee.photoUrl || null,
+      grade: employee.grade,
+      group: employee.group,
+    });
+    // --- *** ចប់កំណែកែប្រែ *** ---
+    console.log(
+      `Session lock set for ${employee.id} with deviceId ${currentDeviceId}`
+    );
+  } catch (e) {
+    console.error("Failed to set session lock:", e);
+    showMessage(
+      "បញ្ហា Session",
+      `មិនអាចកំណត់ Session Lock បានទេ៖ ${e.message}`,
+      true
+    );
+    return;
+  }
 
-  const dayOfWeek = getSyncedTime().getDay();
-  const dayToShiftKey = [
-    "shiftSun",
-    "shiftMon",
-    "shiftTue",
-    "shiftWed",
-    "shiftThu",
-    "shiftFri",
-    "shiftSat",
-  ];
-  const shiftKey = dayToShiftKey[dayOfWeek];
-  currentUserShift = currentUser[shiftKey] || "N/A";
-  console.log(`ថ្ងៃនេះ (Day ${dayOfWeek}), វេនគឺ: ${currentUserShift}`);
+  // ... (កូដខាងក្រោមទាំងអស់ក្នុង selectUser ទុកដដែល)
+  currentUser = employee;
+  localStorage.setItem("savedEmployeeId", employee.id);
 
-  const firestoreUserId = currentUser.id;
-  const simpleDataPath = `attendance/${firestoreUserId}/records`;
-  console.log("Using Firestore Path:", simpleDataPath);
-  attendanceCollectionRef = collection(dbAttendance, simpleDataPath);
+  const dayOfWeek = getSyncedTime().getDay();
+  const dayToShiftKey = [
+    "shiftSun",
+    "shiftMon",
+    "shiftTue",
+    "shiftWed",
+    "shiftThu",
+    "shiftFri",
+    "shiftSat",
+  ];
+  const shiftKey = dayToShiftKey[dayOfWeek];
+  currentUserShift = currentUser[shiftKey] || "N/A";
+  console.log(`ថ្ងៃនេះ (Day ${dayOfWeek}), វេនគឺ: ${currentUserShift}`);
 
-  welcomeMessage.textContent = `សូមស្វាគមន៍`;
-  profileImage.src =
-    employee.photoUrl || "https://placehold.co/80x80/e2e8f0/64748b?text=No+Img";
-  profileName.textContent = employee.name;
-  profileId.textContent = `អត្តលេខ: ${employee.id}`;
-  profileGender.textContent = `ភេទ: ${employee.gender}`;
-  profileDepartment.textContent = `ផ្នែក: ${employee.department}`;
-  profileGroup.textContent = `ក្រុម: ${employee.group}`;
-  profileGrade.textContent = `ថ្នាក់: ${employee.grade}`;
-  profileShift.textContent = `វេនថ្ងៃនេះ: ${currentUserShift}`;
+  const firestoreUserId = currentUser.id;
+  const simpleDataPath = `attendance/${firestoreUserId}/records`;
+  console.log("Using Firestore Path:", simpleDataPath);
+  attendanceCollectionRef = collection(dbAttendance, simpleDataPath);
 
-  changeView("homeView");
+  welcomeMessage.textContent = `សូមស្វាគមន៍`;
+  profileImage.src =
+    employee.photoUrl || "https://placehold.co/80x80/e2e8f0/64748b?text=No+Img";
+  profileName.textContent = employee.name;
+  profileId.textContent = `អត្តលេខ: ${employee.id}`;
+  profileGender.textContent = `ភេទ: ${employee.gender}`;
+  profileDepartment.textContent = `ផ្នែក: ${employee.department}`;
+  profileGroup.textContent = `ក្រុម: ${employee.group}`;
+  profileGrade.textContent = `ថ្នាក់: ${employee.grade}`;
+  profileShift.textContent = `វេនថ្ងៃនេះ: ${currentUserShift}`;
 
-  checkInButton.disabled = true;
-  checkOutButton.disabled = true;
-  attendanceStatus.textContent = "កំពុងទាញប្រវត្តិវត្តមាន...";
-  attendanceStatus.className =
-    "text-center text-sm text-gray-500 pb-4 px-6 h-5 animate-pulse";
+  changeView("homeView");
 
-  await startLeaveListeners();
-  setupAttendanceListener();
-  startSessionListener(employee.id); // <--- Function នេះឥឡូវសំខាន់ណាស់
+  checkInButton.disabled = true;
+  checkOutButton.disabled = true;
+  attendanceStatus.textContent = "កំពុងទាញប្រវត្តិវត្តមាន...";
+  attendanceStatus.className =
+    "text-center text-sm text-gray-500 pb-4 px-6 h-5 animate-pulse";
 
-  if (timeCheckInterval) clearInterval(timeCheckInterval);
-  timeCheckInterval = setInterval(updateButtonState, 30000);
+  await startLeaveListeners();
+  setupAttendanceListener();
+  startSessionListener(employee.id); // <--- Function នេះឥឡូវសំខាន់ណាស់
 
-  prepareFaceMatcher(employee.photoUrl);
-  loadAIModels();
+  if (timeCheckInterval) clearInterval(timeCheckInterval);
+  timeCheckInterval = setInterval(updateButtonState, 30000);
 
-  employeeListContainer.classList.add("hidden");
-  searchInput.value = "";
+  prepareFaceMatcher(employee.photoUrl);
+  loadAIModels();
+
+  employeeListContainer.classList.add("hidden");
+  searchInput.value = "";
 }
                                      
   
@@ -1577,49 +1585,57 @@ async function logout() { // --- ថ្មី: បន្ថែម async ---
 }
 
 // ស្វែងរក Function ឈ្មោះ "startSessionListener"
+// ស្វែងរក Function ឈ្មោះ "startSessionListener"
 function startSessionListener(employeeId) {
-  if (sessionListener) {
-    sessionListener();
-  }
+  if (sessionListener) {
+    sessionListener();
+  }
 
-  const sessionDocRef = doc(sessionCollectionRef, employeeId);
+  const sessionDocRef = doc(sessionCollectionRef, employeeId);
 
-  sessionListener = onSnapshot(
-    sessionDocRef,
-    (docSnap) => {
-      if (!docSnap.exists()) {
-        console.warn("Session document deleted. Logging out.");
-        forceLogout("Session របស់អ្នកត្រូវបានបញ្ចប់។");
-        return;
-      }
+  sessionListener = onSnapshot(
+    sessionDocRef,
+    (docSnap) => {
+      if (!docSnap.exists()) {
+        console.warn("Session document deleted. Logging out.");
+        forceLogout("Session របស់អ្នកត្រូវបានបញ្ចប់។");
+        return;
+      }
 
-      const sessionData = docSnap.data();
+      const sessionData = docSnap.data();
 
-      // --- *** ថ្មី: ពិនិត្យមើល Status "Block" *** ---
-      if (sessionData.status === "Block") {
-        console.warn("Session is BLOCKED by admin. Logging out.");
-        forceLogout("គណនីនេះត្រូវបាន Block ពី Admin។");
-        return; // ចេញពី Function ភ្លាម
-      }
-      // --- *** ចប់ *** ---
+      // --- *** កំណែកែប្រែទី 1: ពិនិត្យ Status "Block" *** ---
+      if (sessionData.status === "Block") {
+        console.warn("Session is BLOCKED by admin. Logging out.");
+        forceLogout("គណនីនេះត្រូវបាន Block ពី Admin។");
+        return; // ចេញពី Function ភ្លាម
+      }
+      // --- *** ចប់ *** ---
+      
+      // --- *** កំណែកែប្រែទី 2 (ថ្មី): ពិនិត្យ Status "Free" *** ---
+      else if (sessionData.status === "Free") {
+        console.warn("Session is set to FREE. Logging out.");
+        forceLogout("គណនីនេះត្រូវបានដោះលែងពីឧបករណ៍នេះ។");
+        return;
+      }
+      // --- *** ចប់ *** ---
 
+      // (ពិនិត្យ Device ID ដូចដើម សម្រាប់ការ Login ឧបករណ៍ផ្សេង)
+      const firestoreDeviceId = sessionData.deviceId;
+      const localDeviceId = localStorage.getItem("currentDeviceId");
 
-      // (ពិនិត្យ Device ID ដូចដើម សម្រាប់ការ Login ឧបករណ៍ផ្សេង)
-      const firestoreDeviceId = sessionData.deviceId;
-      const localDeviceId = localStorage.getItem("currentDeviceId");
-
-      if (localDeviceId && firestoreDeviceId !== localDeviceId) {
-        console.warn("Session conflict detected. Logging out.");
-        // (យើងប្តូរសារ Error នេះ ព្រោះ Logic មុន បានរារាំងវាហើយ)
-        // (ប៉ុន្តែទុកវា នៅទីនេះ ក្រែង Admin ប្តូរ DeviceId ដោយដៃ)
-        forceLogout("Session របស់អ្នកត្រូវបានរំខាន។");
-      }
-    },
-    (error) => {
-      console.error("Error in session listener:", error);
-      forceLogout("មានបញ្ហាក្នុងការតភ្ជាប់ Session។");
-    }
-  );
+      // --- *** កំណែកែប្រែទី 3: ប្រើ "else if" *** ---
+      else if (localDeviceId && firestoreDeviceId !== localDeviceId) {
+        console.warn("Session conflict detected. Logging out.");
+        forceLogout("Session របស់អ្នកត្រូវបានរំខាន (ឧបករណ៍ផ្សេង)។");
+      }
+      // --- *** ចប់ *** ---
+    },
+    (error) => {
+      console.error("Error in session listener:", error);
+      forceLogout("មានបញ្ហាក្នុងការតភ្ជាប់ Session។");
+    }
+  );
 }
 
 function forceLogout(message) {
