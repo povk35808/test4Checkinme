@@ -17,7 +17,6 @@ import {
   where,
   getDocs,
   getDoc, // <-- *** ថ្មី: បន្ថែម getDoc ***
-  getDocFromServer, // <-- *** នេះគឺជាការកែប្រែ ***
   deleteDoc, // <-- *** ថ្មី: បន្ថែម deleteDoc ***
 } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 import {
@@ -52,11 +51,8 @@ let timeOffset = 0;
 let isTimeSynced = false;
 
 // --- អថេរសម្រាប់គ្រប់គ្រង Session (Device Lock) ---
-let sessionCollectionRef = null; // <-- *** សូមប្រាកដថាអ្នកបានបន្ថែមបន្ទាត់នេះ ***
+let sessionCollectionRef = null;
 let sessionListener = null;
-let visibilityListener = null;
-let pageHideListener = null;
-let pageShowListener = null;
 let currentDeviceId = null;
 
 // --- AI & Camera Global Variables ---
@@ -742,21 +738,14 @@ async function mergeAndRenderHistory() {
 // --- AI & Camera Functions ---
 
 // ស្វែងរក Function ឈ្មោះ "loadAIModels"
-// ស្វែងរក Function ឈ្មោះ "loadAIModels" ហើយជំនួសវា
-// ស្វែងរក Function ឈ្មោះ "loadAIModels" ហើយជំនួសវា
-// ស្វែងរក Function ឈ្មោះ "loadAIModels" ហើយជំនួសវា
-// ស្វែងរក Function ឈ្មោះ "loadAIModels" ហើយជំនួសវា
-// ស្វែងរក Function ឈ្មោះ "loadAIModels" ហើយជំនួសវា
-// ស្វែងរក Function ឈ្មោះ "loadAIModels" ហើយជំនួសវា
 async function loadAIModels() {
-  // --- *** ថ្មី: ប្រើ CDN URL ជំនួស Folder "models" *** ---
-  const MODEL_URL = "https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/models";
+  const MODEL_URL = "./models";
+  
+  // --- *** កំណែកែប្រែ *** ---
+  // loadingText.textContent = "កំពុងទាញយក AI Models..."; // << ដកចេញ ព្រោះវារត់ក្នុង Background
   // --- *** ចប់ *** ---
 
-  loadingText.textContent = "កំពុងទាញយក AI Models...";
-
   try {
-    // (useDiskCache: true នឹងរក្សាទុកវាក្នុង Browser)
     await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL, {
       useDiskCache: true,
     });
@@ -767,21 +756,18 @@ async function loadAIModels() {
       useDiskCache: true,
     });
 
-    console.log("AI Models Loaded (from CDN)");
+    console.log("AI Models Loaded");
     modelsLoaded = true;
+
+    // --- *** នេះគឺជាការកែប្រែដ៏សំខាន់បំផុត *** ---
+    // await fetchGoogleSheetData(); // <<--- លុបបន្ទាត់នេះចេញ! (នេះជាអ្នកបង្ក Loop)
+    // --- *** ចប់ *** ---
 
   } catch (e) {
     console.error("Error loading AI models", e);
-    showMessage(
-      "បញ្ហា AI Model",
-      `មិនអាចផ្ទុក AI Models ពី CDN បានទេ (${e.message})។ សូមពិនិត្យ Internet។`,
-      true
-    );
-    throw e; // បោះ Error ដើម្បីបញ្ឈប់ការ Login
+    // យើងមិនបង្ហាញ Message ទេ ព្រោះ User មិនឃើញវា
   }
 }
-
-
 
 async function prepareFaceMatcher(imageUrl) {
   currentUserFaceMatcher = null;
@@ -1113,11 +1099,6 @@ async function handleCaptureAndAnalyze() {
 
 // --- Main Functions ---
 
-// ស្វែងរក Function ឈ្មោះ "initializeAppFirebase" ហើយជំនួសវា
-// ស្វែងរក Function ឈ្មោះ "initializeAppFirebase" ហើយជំនួសវា
-// ស្វែងរក Function ឈ្មោះ "initializeAppFirebase" ហើយជំនួសវា
-// ស្វែងរក Function ឈ្មោះ "initializeAppFirebase" ហើយជំនួសវា
-// ស្វែងរក Function ឈ្មោះ "initializeAppFirebase" ហើយជំនួសវា
 async function initializeAppFirebase() {
   try {
     const attendanceApp = initializeApp(firebaseConfigAttendance);
@@ -1130,16 +1111,11 @@ async function initializeAppFirebase() {
     const leaveApp = initializeApp(firebaseConfigLeave, "leaveApp");
     dbLeave = getFirestore(leaveApp);
 
-    console.log("Firebase Apps Initialized.");
-    setLogLevel("debug");
-    
-    // 1. រង់ចាំ Auth និង Time Sync ឱ្យរួចរាល់សិន
-    await setupAuthListener(); 
-    
-    // 2. បន្ទាប់ពី Auth រួចរាល់, ទើបចាប់ផ្ដើមទាញទិន្នន័យ
-    console.log("Auth is ready. Starting main app logic (fetch/load)...");
-    await fetchGoogleSheetData(); // នេះនឹងទាញបញ្ជីឈ្មោះ + AI Models
+    console.log("Firebase Attendance App Initialized (Default)");
+    console.log("Firebase Leave App Initialized (leaveApp)");
 
+    setLogLevel("debug");
+    await setupAuthListener();
   } catch (error) {
     console.error("Firebase Init Error:", error);
     showMessage(
@@ -1203,48 +1179,57 @@ function fetchCheckInLateRules() {
 }
 
 // ស្វែងរក Function ឈ្មោះ "setupAuthListener"
-// ស្វែងរក Function ឈ្មោះ "setupAuthListener" ហើយជំនួសវា
-// ស្វែងរក Function ឈ្មោះ "setupAuthListener" ហើយជំនួសវា
-// ស្វែងរក Function ឈ្មោះ "setupAuthListener" ហើយជំនួសវា
-// ស្វែងរក Function ឈ្មោះ "setupAuthListener" ហើយជំនួសវា
 async function setupAuthListener() {
-  return new Promise((resolve, reject) => { // ត្រូវតែ Return Promise
+  return new Promise((resolve, reject) => {
     onAuthStateChanged(authAttendance, async (user) => {
       if (user) {
         console.log("Firebase Auth user signed in:", user.uid);
+        
         try {
           await syncFirebaseTime();
           fetchShiftRules();
           fetchCheckInLateRules();
           
-          resolve(); // ប្រាប់ initializeAppFirebase ថា Auth រួចរាល់
+          // --- *** កំណែកែប្រែ *** ---
+          // នេះគឺជាចំណុចចាប់ផ្ដើមត្រឹមត្រូវ
+          await fetchGoogleSheetData(); 
+          // --- *** ចប់ *** ---
+
+          resolve();
         } catch (error) {
           console.error("Failed to init app due to time sync error.");
           reject(error);
         }
+
       } else {
         try {
           await signInAnonymously(authAttendance);
         } catch (error) {
           console.error("Firebase Sign In Error:", error);
-          reject(error); // Reject ប្រសិនបើ Sign In បរាជ័យ
+          showMessage(
+            "បញ្ហា Sign In",
+            `មិនអាច Sign In ទៅ Firebase បានទេ: ${error.message}`,
+            true
+          );
+          reject(error);
         }
       }
     });
   });
 }
+
+
 // ស្វែងរក Function ឈ្មោះ "fetchGoogleSheetData"
-// ស្វែងរក Function ឈ្មោះ "fetchGoogleSheetData" ហើយជំនួសវា
-// ស្វែងរក Function ឈ្មោះ "fetchGoogleSheetData" ហើយជំនួសវា
-// ស្វែងរក Function ឈ្មោះ "fetchGoogleSheetData" ហើយជំនួសវា
-// ស្វែងរក Function ឈ្មោះ "fetchGoogleSheetData" ហើយជំនួសវា
-// ស្វែងរក Function ឈ្មោះ "fetchGoogleSheetData" ហើយជំនួសវា
 async function fetchGoogleSheetData() {
   changeView("loadingView");
   loadingText.textContent = "កំពុងទាញបញ្ជីបុគ្គលិក...";
 
+  // --- *** ថ្មី: ប្រើប្រាស់ប្រព័ន្ធ Cache *** ---
   const CACHE_KEY = "employee_list_cache";
-  const CACHE_DURATION_MS = 5 * 60 * 1000; // 5 នាទី
+  
+  // *** កំណែកែប្រែ តាមការស្នើសុំ ***
+  const CACHE_DURATION_MS = 5 * 60 * 1000; // 5 នាទី 
+  // --- *** ចប់កំណែកែប្រែ *** ---
 
   try {
     const cachedData = await localforage.getItem(CACHE_KEY);
@@ -1262,23 +1247,41 @@ async function fetchGoogleSheetData() {
     }
 
     if (isCacheValid) {
+      // ប្រើទិន្នន័យពី Cache ភ្លាមៗ
       renderEmployeeList(allEmployees);
+      checkSavedLogin(); // ហៅ Function បំបែក (ខាងក្រោម)
     }
+
+    // បន្តទាញយកទិន្នន័យថ្មីពី GSheet (ទោះបីមាន Cache ក៏ដោយ)
+    // ប្រសិនបើ Cache មិនvalid (isCacheValid === false), វានឹងបង្ហាញ Loading...
+    // ប្រសិនបើ Cache valid (isCacheValid === true), វានឹងទាញយកក្នុងផ្ទៃខាងក្រោយ
     
     const response = await fetch(GVIZ_URL);
-    if (!response.ok) throw new Error(`Network response was not ok (${response.status})`);
-    
+    if (!response.ok) {
+      throw new Error(`Network response was not ok (${response.status})`);
+    }
     let text = await response.text();
-    const jsonText = text.match(/google\.visualization\.Query\.setResponse\((.*)\);/s);
-    if (!jsonText || !jsonText[1]) throw new Error("Invalid Gviz response format.");
-    
+
+    const jsonText = text.match(
+      /google\.visualization\.Query\.setResponse\((.*)\);/s
+    );
+    if (!jsonText || !jsonText[1]) {
+      throw new Error("Invalid Gviz response format.");
+    }
+
     const data = JSON.parse(jsonText[1]);
+
     if (data.status === "error") {
-      throw new Error(`Google Sheet Error: ${data.errors.map((e) => e.detailed_message).join(", ")}`);
+      throw new Error(
+        `Google Sheet Error: ${data.errors
+          .map((e) => e.detailed_message)
+          .join(", ")}`
+      );
     }
 
     const freshEmployees = data.table.rows
       .map((row) => {
+        // ... (កូដ map របស់អ្នកទុកដដែល)
         const cells = row.c;
         const id = cells[COL_INDEX.ID]?.v;
         if (!id) {
@@ -1308,28 +1311,26 @@ async function fetchGoogleSheetData() {
 
     console.log(`Loaded ${freshEmployees.length} employees from GSheet.`);
     
+    // រក្សាទុកទិន្នន័យថ្មីទៅ Cache
     await localforage.setItem(CACHE_KEY, {
       data: freshEmployees,
       timestamp: Date.now(),
     });
 
+    // ប្រសិនបើ Cache មិន valid (isCacheValid === false)
+    // យើងត្រូវ Update UI ជាមួយទិន្នន័យថ្មី
     if (!isCacheValid) {
       allEmployees = freshEmployees;
       renderEmployeeList(allEmployees);
+      checkSavedLogin(); // ហៅ Function បំបែក
     }
-    
-    // --- *** ថ្មី: ផ្ទុក AI Models បន្ទាប់ពីទាញ GSheet រួច *** ---
-    await loadAIModels(); // ហៅ Function ថ្មី (CDN)
-    // --- *** ចប់ *** ---
-    
-    // ឥឡូវទើបយើងអាច Login
-    checkSavedLogin();
 
   } catch (error) {
+    // ... (កូដ catch error របស់អ្នកទុកដដែល)
     console.error("Fetch Google Sheet Error:", error);
     showMessage(
       "បញ្ហាទាញទិន្នន័យ",
-      `មិនអាចទាញទិន្នន័យពី Google Sheet បានទេ។ Error: ${error.message}`,
+      `មិនអាចទាញទិន្នន័យពី Google Sheet បានទេ។ សូមប្រាកដថា Sheet ត្រូវបាន Publish to the web។ Error: ${error.message}`,
       true
     );
   }
@@ -1395,95 +1396,52 @@ function renderEmployeeList(employees) {
 // ស្វែងរក Function ឈ្មោះ "selectUser"
 // ស្វែងរក Function ឈ្មោះ "selectUser"
 // ស្វែងរក Function ឈ្មោះ "selectUser"
-// ស្វែងរក Function ឈ្មោះ "selectUser"
-// ស្វែងរក Function ឈ្មោះ "selectUser"
-// ស្វែងរក Function ឈ្មោះ "selectUser"
-// ស្វែងរក Function ឈ្មោះ "selectUser" ហើយជំនួសវាទាំងមូល
-// ស្វែងរក Function ឈ្មោះ "selectUser" ហើយជំនួសវា
-// ស្វែងរក Function ឈ្មោះ "selectUser" ហើយជំនួសវា
-// ស្វែងរក Function ឈ្មោះ "selectUser" ហើយជំនួសវា
 async function selectUser(employee) {
-  console.log("User selected:", employee); 
+  console.log("User selected:", employee);
 
+  // --- *** ពិនិត្យ Session Lock (កូដពីមុន) *** ---
   const sessionDocRef = doc(sessionCollectionRef, employee.id);
-  const localDeviceId = localStorage.getItem("currentDeviceId") || self.crypto.randomUUID();
-
-  // --- *** 1. ពិនិត្យ Session Lock (Block, Free, Active/Offline) *** ---
   try {
-    console.log("Forcing server check for session...");
-    const docSnap = await getDocFromServer(sessionDocRef); 
-
+    const docSnap = await getDoc(sessionDocRef);
+    
     if (docSnap.exists()) {
       const sessionData = docSnap.data();
-      const sessionStatus = sessionData.status || null;
-      const sessionDeviceId = sessionData.deviceId || null;
+      const sessionTimestamp = new Date(sessionData.timestamp).getTime();
+      const sessionAge = getSyncedTime().getTime() - sessionTimestamp;
 
-      if (sessionStatus === "Block") {
-        console.warn("Login BLOCKED. Account is manually blocked by Admin.");
-        throw new Error(`ACCOUNT_BLOCKED::${employee.name}`);
+      if (sessionAge < SESSION_TIMEOUT_MS) {
+        console.warn("Login BLOCKED. Session is active on another device.");
+        showMessage(
+          "មិនអាចចូលប្រើបាន",
+          `គណនីនេះ (${employee.name}) កំពុងត្រូវបានប្រើនៅលើឧបករណ៍ផ្សេង។ សូមធ្វើការ Logout ចេញពីឧបករណ៍នោះជាមុនសិន។`,
+          true
+        );
+        return; 
+      } else {
+        console.log("Stale session detected (> 24h). Overwriting...");
       }
-      if (sessionStatus === "Free") {
-        console.log("Session is 'Free'. Proceeding with login.");
-      } else if (sessionStatus === "Active" || sessionStatus === "Offline") {
-        if (sessionDeviceId === localDeviceId) {
-          console.log("Device ID matches. Reconnecting...");
-        } else {
-          console.warn("Login BLOCKED. Session is active on another device.");
-          showMessage(
-            "មិនអាចចូលប្រើបាន",
-            `គណនីនេះ (${employee.name}) កំពុងចាក់សោលើឧបករណ៍ផ្សេង។ សូម Logout ពីឧបករណ៍នោះ ឬស្នើ Admin ឱ្យកំណត់ 'Free'។`,
-            true
-          );
-          return; 
-        }
-      }
-      
-    } else {
-      console.log("No session doc found. Proceeding with login.");
     }
-
   } catch (e) {
-    // --- *** 2. Catch Block សម្រាប់ដោះស្រាយ Error *** ---
-    if (e.message.startsWith("ACCOUNT_BLOCKED")) {
-      const name = e.message.split("::")[1] || employee.name;
-      
-      showMessage(
-        "គណនីត្រូវបានទប់ស្កាត់",
-        `គណនីនេះ (${name}) ត្រូវបាន Block ដោយ Admin។ សូមទាក់ទងអ្នកគ្រប់គ្រង។`,
-        true
-      );
-      
-      currentConfirmCallback = () => {
-        localStorage.removeItem("savedEmployeeId");
-        localStorage.removeItem("currentDeviceId"); 
-        currentDeviceId = null;
-        currentUser = null;
-        hideMessage();
-        changeView("employeeListView");
-      };
-      return;
-    }
-    console.error("Failed to check session doc from server:", e);
+    console.error("Failed to check session doc:", e);
     showMessage("បញ្ហា Session", `មិនអាចពិនិត្យ Session Lock បានទេ៖ ${e.message}`, true);
     return;
   }
   // --- *** ចប់ការពិនិត្យ *** ---
 
-  // --- *** 3. បន្តដំណើរការ Login (បើผ่าน) *** ---
-  currentDeviceId = localDeviceId; 
+
+  // បើមកដល់ចំណុចនេះ = អនុញ្ញាតឱ្យ Login
+  currentDeviceId = self.crypto.randomUUID();
   localStorage.setItem("currentDeviceId", currentDeviceId);
 
   try {
+    // --- *** នេះជាកន្លែងកែប្រែ *** ---
     await setDoc(sessionDocRef, { 
       deviceId: currentDeviceId,
       timestamp: getSyncedTime().toISOString(),
-      status: "Active",
       employeeName: employee.name,
-      employeeId: employee.id,
-      employeeGrade: employee.grade,
-      employeePhoto: employee.photoUrl,
-      employeeGroup: employee.group,
+      status: "Active", // <-- *** ថ្មី: បន្ថែម Status ***
     });
+    // --- *** ចប់ *** ---
     console.log(
       `Session lock set for ${employee.id} with deviceId ${currentDeviceId}`
     );
@@ -1497,10 +1455,10 @@ async function selectUser(employee) {
     return;
   }
 
+  // ... (កូដខាងក្រោមទាំងអស់ក្នុង selectUser ទុកដដែល)
   currentUser = employee;
   localStorage.setItem("savedEmployeeId", employee.id);
-  
-  // (កូដ 4, 5, 6, 7 ទុកដដែល)
+
   const dayOfWeek = getSyncedTime().getDay();
   const dayToShiftKey = [
     "shiftSun",
@@ -1539,56 +1497,55 @@ async function selectUser(employee) {
   attendanceStatus.className =
     "text-center text-sm text-gray-500 pb-4 px-6 h-5 animate-pulse";
 
-  // --- *** 8. ចាប់ផ្ដើម Listeners ទាំងអស់ *** ---
-  // (ឥឡូវនេះវានឹង "Defined" ព្រោះវាត្រូវបានហៅចុងក្រោយ)
   await startLeaveListeners();
   setupAttendanceListener();
-  startSessionListener(employee.id); 
-  startVisibilityListener(employee.id);
+  startSessionListener(employee.id); // <--- Function នេះឥឡូវសំខាន់ណាស់
 
-  // (កូដ 9 ទុកដដែល)
   if (timeCheckInterval) clearInterval(timeCheckInterval);
   timeCheckInterval = setInterval(updateButtonState, 30000);
 
-  // --- *** 10. ត្រៀម AI *** ---
-  prepareFaceMatcher(employee.photoUrl); // <-- ឥឡូវនេះវានឹងរត់
-  
-  // (loadAIModels() ត្រូវបានដកចេញពីទីនេះ)
+  prepareFaceMatcher(employee.photoUrl);
+  loadAIModels();
 
-  // (កូដ 11 ទុកដដែល)
   employeeListContainer.classList.add("hidden");
   searchInput.value = "";
 }
                                      
-
-// --- *** ថ្មី: Function សម្រាប់សម្អាត Session ក្នុង Local *** ---
-// (Function នេះ មិនមែន Async ទេ គឺវាលឿន)
-// --- *** ថ្មី: Function សម្រាប់សម្អាត Session ក្នុង Local *** ---
-// (Function នេះ មិនមែន Async ទេ គឺវាលឿន)
-function clearLocalSession() {
-  console.log("Clearing local session state.");
   
-  // បញ្ឈប់ Listeners ទាំងអស់
-  if (visibilityListener) {
-    document.removeEventListener("visibilitychange", visibilityListener);
-    visibilityListener = null;
+// ស្វែងរក Function ឈ្មោះ "logout"
+async function logout() { // --- ថ្មី: បន្ថែម async ---
+
+  // --- *** ថ្មី: លុប Session Lock ពី Firestore *** ---
+  if (currentUser && sessionCollectionRef) {
+    try {
+      const sessionDocRef = doc(sessionCollectionRef, currentUser.id);
+      await deleteDoc(sessionDocRef);
+      console.log(`Session lock deleted for ${currentUser.id}`);
+    } catch (e) {
+      console.error("Failed to delete session lock:", e);
+      // (បន្ត Logout ធម្មតា ទោះបី fail ក៏ដោយ)
+    }
   }
-  if (pageHideListener) {
-    window.removeEventListener("pagehide", pageHideListener);
-    pageHideListener = null;
-  }
-  if (pageShowListener) {
-    window.removeEventListener("pageshow", pageShowListener);
-    pageShowListener = null;
-  }
-  if (sessionListener) {
-    sessionListener(); // Unsubscribe
-    sessionListener = null;
-  }
+  // --- *** ចប់ *** ---
+
+  currentUser = null;
+  currentUserShift = null;
+  currentUserFaceMatcher = null;
+
+  localStorage.removeItem("savedEmployeeId");
+  localStorage.removeItem("currentDeviceId");
+  currentDeviceId = null;
+
   if (attendanceListener) {
-    attendanceListener(); // Unsubscribe
+    attendanceListener();
     attendanceListener = null;
   }
+
+  if (sessionListener) {
+    sessionListener();
+    sessionListener = null;
+  }
+
   if (leaveCollectionListener) {
     leaveCollectionListener();
     leaveCollectionListener = null;
@@ -1598,27 +1555,16 @@ function clearLocalSession() {
     outCollectionListener = null;
   }
 
-  // បញ្ឈប់ Timer (សំខាន់!)
   if (timeCheckInterval) {
     clearInterval(timeCheckInterval);
     timeCheckInterval = null;
   }
-
-  // សម្អាតទិន្នន័យ User (សំខាន់!)
-  currentUser = null;
-  currentUserShift = null;
-  currentUserFaceMatcher = null;
-  
-  localStorage.removeItem("savedEmployeeId");
-  localStorage.removeItem("currentDeviceId"); 
-  currentDeviceId = null;
 
   attendanceCollectionRef = null;
   currentMonthRecords = [];
   attendanceRecords = [];
   leaveRecords = [];
 
-  // សម្អាត UI
   if (historyContainer) {
     historyContainer.innerHTML = "";
     if (noHistoryRow) {
@@ -1626,6 +1572,7 @@ function clearLocalSession() {
       historyContainer.appendChild(noHistoryRow);
     }
   }
+
   if (monthlyHistoryContainer) {
     monthlyHistoryContainer.innerHTML = "";
     if (noMonthlyHistoryRow) {
@@ -1636,129 +1583,79 @@ function clearLocalSession() {
 
   searchInput.value = "";
   employeeListContainer.classList.add("hidden");
-}
 
-
-  
-// --- *** ចប់ Function ថ្មី *** ---
-
-// ស្វែងរក Function ឈ្មោះ "logout"
-// ស្វែងរក Function ឈ្មោះ "logout"
-async function logout() { 
-  
-  // ធ្វើការងារ Firestore ជាមុន (Update ទៅ "Free")
-  if (currentUser && sessionCollectionRef) {
-    try {
-      const sessionDocRef = doc(sessionCollectionRef, currentUser.id);
-      await updateDoc(sessionDocRef, { 
-        status: "Free",
-      });
-      console.log(`Session status set to 'Free' for ${currentUser.id}`);
-    } catch (e) {
-      console.error("Failed to set session status to 'Free':", e);
-    }
-  }
-
-  // ហៅ Function សម្អាត (បន្ទាប់ពី await)
-  clearLocalSession();
-
-  // ជំហានចុងក្រោយ: ប្តូរ View
   changeView("employeeListView");
 }
 
 // ស្វែងរក Function ឈ្មោះ "startSessionListener"
-// ស្វែងរក Function ឈ្មោះ "startSessionListener"
-// (ត្រូវប្រាកដថាអថេរនេះមាននៅ Global)
-// let visibilityListener = null; 
-
-// (ត្រូវប្រាកដថាអថេរ Global ទាំងនេះមាន)
-// let visibilityListener = null;
-// let pageHideListener = null;
-// let pageShowListener = null;
-
-// ស្វែងរក Function ឈ្មោះ "startVisibilityListener"
-function startVisibilityListener(employeeId) {
-  if (!sessionCollectionRef) return;
+function startSessionListener(employeeId) {
+  if (sessionListener) {
+    sessionListener();
+  }
 
   const sessionDocRef = doc(sessionCollectionRef, employeeId);
 
-  // --- ថ្មី: បង្កើត Function សម្រាប់ Update Status ---
-  const updateStatus = async (newStatus) => {
-    if (!currentUser || !currentDeviceId) return;
-    const localDeviceId = localStorage.getItem("currentDeviceId");
-    if (currentDeviceId !== localDeviceId) return;
+  sessionListener = onSnapshot(
+    sessionDocRef,
+    (docSnap) => {
+      if (!docSnap.exists()) {
+        console.warn("Session document deleted. Logging out.");
+        forceLogout("Session របស់អ្នកត្រូវបានបញ្ចប់។");
+        return;
+      }
 
-    console.log(`Presence Update: Setting status to: ${newStatus}`);
-    try {
-      await updateDoc(sessionDocRef, {
-        status: newStatus,
-        timestamp: getSyncedTime().toISOString(),
-      });
-    } catch (e) {
-      console.warn(`Failed to update presence status: ${e.message}`);
+      const sessionData = docSnap.data();
+
+      // --- *** ថ្មី: ពិនិត្យមើល Status "Block" *** ---
+      if (sessionData.status === "Block") {
+        console.warn("Session is BLOCKED by admin. Logging out.");
+        forceLogout("គណនីនេះត្រូវបាន Block ពី Admin។");
+        return; // ចេញពី Function ភ្លាម
+      }
+      // --- *** ចប់ *** ---
+
+
+      // (ពិនិត្យ Device ID ដូចដើម សម្រាប់ការ Login ឧបករណ៍ផ្សេង)
+      const firestoreDeviceId = sessionData.deviceId;
+      const localDeviceId = localStorage.getItem("currentDeviceId");
+
+      if (localDeviceId && firestoreDeviceId !== localDeviceId) {
+        console.warn("Session conflict detected. Logging out.");
+        // (យើងប្តូរសារ Error នេះ ព្រោះ Logic មុន បានរារាំងវាហើយ)
+        // (ប៉ុន្តែទុកវា នៅទីនេះ ក្រែង Admin ប្តូរ DeviceId ដោយដៃ)
+        forceLogout("Session របស់អ្នកត្រូវបានរំខាន។");
+      }
+    },
+    (error) => {
+      console.error("Error in session listener:", error);
+      forceLogout("មានបញ្ហាក្នុងការតភ្ជាប់ Session។");
     }
-  };
-  // --- ចប់ ---
-
-  // 1. គ្រប់គ្រងការប្តូរ Tab (Minimize/Switch Tab)
-  if (visibilityListener) {
-    document.removeEventListener("visibilitychange", visibilityListener);
-  }
-  visibilityListener = () => {
-    if (document.visibilityState === "visible") {
-      updateStatus("Active");
-    } else {
-      updateStatus("Offline");
-    }
-  };
-  document.addEventListener("visibilitychange", visibilityListener);
-
-  // --- *** ថ្មី: គ្រប់គ្រងការបិទ Tab (Close App) *** ---
-  // 2. គ្រប់គ្រងការបិទ App (pagehide គឺ Event ចុងក្រោយ)
-  if (pageHideListener) {
-    window.removeEventListener("pagehide", pageHideListener);
-  }
-  pageHideListener = () => {
-    // នេះជាឱកាសចុងក្រោយ ត្រូវ Update ទៅ "Offline"
-    updateStatus("Offline");
-  };
-  window.addEventListener("pagehide", pageHideListener);
-  // --- *** ចប់ *** ---
-
-  // 3. គ្រប់គ្រងការបើក App (ពេលប្រើ Back/Forward cache)
-  if (pageShowListener) {
-    window.removeEventListener("pageshow", pageShowListener);
-  }
-  pageShowListener = (event) => {
-    if (event.persisted) {
-      updateStatus("Active");
-    }
-  };
-  window.addEventListener("pageshow", pageShowListener);
+  );
 }
 
 // ស្វែងរក Function ឈ្មោះ "forceLogout"
-// ស្វែងរក Function ឈ្មោះ "forceLogout"
 function forceLogout(message) {
-  
-  // ហៅ Function សម្អាត (លឿន) ភ្លាមៗ
-  clearLocalSession();
+  logout();
 
   modalTitle.textContent = "បានចាកចេញដោយស្វ័យប្រវត្តិ";
   modalMessage.textContent = message;
   modalTitle.classList.remove("text-gray-800");
   modalTitle.classList.add("text-red-600");
 
+  // --- *** ថ្មី: លាក់កន្លែងប៊ូតុង *** ---
   modalActions.style.display = "none";
   currentConfirmCallback = null;
+  // --- *** ចប់ *** ---
 
   customModal.classList.remove("modal-hidden");
   customModal.classList.add("modal-visible");
 
+  // --- *** ថ្មី: បិទស្វ័យប្រវត្តិ 2 វិនាទី *** ---
   setTimeout(() => {
-    hideMessage(); 
-    changeView("employeeListView"); // ទៅទំព័រ Login
-  }, 2000); 
+    hideMessage(); // (This will hide the modal)
+    changeView("employeeListView"); // (This will go to login)
+  }, 2000); // 2 វិនាទី
+  // --- *** ចប់ *** ---
 }
 
 // ស្វែងរក Function ឈ្មោះ "startLeaveListeners"
@@ -2087,16 +1984,7 @@ function renderTodayHistory() {
   container.appendChild(card);
 }
 
-// ស្វែងរក Function ឈ្មោះ "updateButtonState" ហើយជំនួសវា
-// ស្វែងរក Function ឈ្មោះ "updateButtonState" ហើយជំនួសវា
 async function updateButtonState() {
-  
-  // (Guard Clause ពីមុន ទុកដដែល)
-  if (!currentUser) {
-    console.warn("updateButtonState skipped: User is null (logging out).");
-    return;
-  }
-
   const todayString = getTodayDateString();
   const todayData = currentMonthRecords.find(
     (record) => record.date === todayString
@@ -2117,11 +2005,9 @@ async function updateButtonState() {
   let statusMessage = "សូមធ្វើការ Check-in";
   let statusClass = "text-blue-700";
 
-  // (Logic ពិនិត្យវត្តមាន/ច្បាប់ ទុកដដែល)
   if (todayData && todayData.checkIn) {
     checkInDisabled = true;
     if (todayData.checkIn.includes("(មកយឺត)")) {
-      // ... (កូដ statusMessage ទុកដដែល)
       statusMessage = `បាន Check-in ម៉ោង: ${todayData.checkIn}`;
       statusClass = "text-red-700";
     } else if (isShortData(`<span class="${statusClass}">${todayData.checkIn}</span>`)) {
@@ -2141,11 +2027,13 @@ async function updateButtonState() {
     statusClass = "text-yellow-600";
   }
 
-  // (Logic ពិនិត្យ checkOutDisabled ទុកដដែល)
+  checkInButton.disabled = checkInDisabled;
+
   let checkOutDisabled = true;
+
   if (todayData && todayData.checkIn && !todayData.checkOut) {
     checkOutDisabled = false;
-    // ... (កូដ leaveBlockOut/canCheckOut ទុកដដែល)
+
     if (leaveBlockOut) {
       checkOutDisabled = true;
       statusMessage = `អ្នកបានសុំច្បាប់៖ ${leaveBlockOut.reason}`;
@@ -2155,21 +2043,21 @@ async function updateButtonState() {
       statusMessage = `ក្រៅម៉ោង Check-out (${currentUserShift})`;
       statusClass = "text-yellow-600";
     }
-    // ... (កូដ statusMessage ពេល checkIn ទុកដដែល)
+    
     if (isShortData(`<span class="${statusClass}">${todayData.checkIn}</span>`)) {
         if (checkOutDisabled) {
           // Keep the 'leave' or 'outside shift' message
         } else if (todayData.checkIn.includes("(មកយឺត)")) {
-          statusMessage = `បាន Check-in ម៉ោង: ${todayData.checkIn}`;
-          statusClass = "text-red-700";
+            statusMessage = `បាន Check-in ម៉ោង: ${todayData.checkIn}`;
+            statusClass = "text-red-700";
         } else {
           statusMessage = `បាន Check-in ម៉ោង: ${todayData.checkIn}`;
           statusClass = "text-green-700";
         }
     }
+
   } else if (todayData && todayData.checkOut) {
     checkOutDisabled = true;
-    // ... (កូដ statusMessage ពេល checkOut ទុកដដែល)
     if (isShortData(`<span class="${statusClass}">${todayData.checkOut}</span>`)) {
       statusMessage = `បាន Check-out ម៉ោង: ${todayData.checkOut}`;
       statusClass = "text-red-700";
@@ -2178,22 +2066,7 @@ async function updateButtonState() {
       statusClass = "text-blue-700";
     }
   }
-
-  // --- *** ថ្មី: បន្ថែមការពិនិត្យ AI Models *** ---
-  // (នេះគឺជាការកែប្រែដ៏សំខាន់)
-  if (!modelsLoaded) {
-    checkInDisabled = true;
-    checkOutDisabled = true;
-    
-    // ប្តូរសារ ប្រសិនបើមិនមាន Error ផ្សេង
-    if (statusMessage === "សូមធ្វើការ Check-in") {
-       statusMessage = "កំពុងផ្ទុក AI Models... សូមរង់ចាំ";
-       statusClass = "text-yellow-600 animate-pulse";
-    }
-  }
-  // --- *** ចប់ *** ---
   
-  checkInButton.disabled = checkInDisabled;
   checkOutButton.disabled = checkOutDisabled;
 
   attendanceStatus.textContent = statusMessage;
