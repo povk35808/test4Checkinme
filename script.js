@@ -243,17 +243,11 @@ function changeView(viewId) {
   }
 }
 
-// ស្វែងរក Function ឈ្មោះ "showMessage"
 function showMessage(title, message, isError = false) {
   modalTitle.textContent = title;
   modalMessage.textContent = message;
   modalTitle.classList.toggle("text-red-600", isError);
   modalTitle.classList.toggle("text-gray-800", !isError);
-
-  // --- *** ថ្មី: ត្រូវប្រាកដថាកន្លែងប៊ូតុង ត្រូវបានបង្ហាញ *** ---
-  // (HTML របស់អ្នកប្រើ "grid" សម្រាប់ប៊ូតុង)
-  modalActions.style.display = "grid"; 
-  // --- *** ចប់ *** ---
 
   modalConfirmButton.textContent = "យល់ព្រម";
   modalConfirmButton.className =
@@ -266,16 +260,11 @@ function showMessage(title, message, isError = false) {
   customModal.classList.add("modal-visible");
 }
 
-// ស្វែងរក Function ឈ្មោះ "showConfirmation"
 function showConfirmation(title, message, confirmText, onConfirm) {
   modalTitle.textContent = title;
   modalMessage.textContent = message;
   modalTitle.classList.remove("text-red-600");
   modalTitle.classList.add("text-gray-800");
-
-  // --- *** ថ្មី: ត្រូវប្រាកដថាកន្លែងប៊ូតុង ត្រូវបានបង្ហាញ *** ---
-  modalActions.style.display = "grid";
-  // --- *** ចប់ *** ---
 
   modalConfirmButton.textContent = confirmText;
   modalConfirmButton.className =
@@ -1633,7 +1622,6 @@ function startSessionListener(employeeId) {
   );
 }
 
-// ស្វែងរក Function ឈ្មោះ "forceLogout"
 function forceLogout(message) {
   logout();
 
@@ -1642,20 +1630,18 @@ function forceLogout(message) {
   modalTitle.classList.remove("text-gray-800");
   modalTitle.classList.add("text-red-600");
 
-  // --- *** ថ្មី: លាក់កន្លែងប៊ូតុង *** ---
-  modalActions.style.display = "none";
-  currentConfirmCallback = null;
-  // --- *** ចប់ *** ---
+  modalConfirmButton.textContent = "យល់ព្រម";
+  modalConfirmButton.className =
+    "w-full bg-blue-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 col-span-2";
+  modalCancelButton.style.display = "none";
+
+  currentConfirmCallback = () => {
+    hideMessage();
+    changeView("employeeListView");
+  };
 
   customModal.classList.remove("modal-hidden");
   customModal.classList.add("modal-visible");
-
-  // --- *** ថ្មី: បិទស្វ័យប្រវត្តិ 2 វិនាទី *** ---
-  setTimeout(() => {
-    hideMessage(); // (This will hide the modal)
-    changeView("employeeListView"); // (This will go to login)
-  }, 2000); // 2 វិនាទី
-  // --- *** ចប់ *** ---
 }
 
 // ស្វែងរក Function ឈ្មោះ "startLeaveListeners"
